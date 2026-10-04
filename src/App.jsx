@@ -6,11 +6,13 @@ import { redistributeTags } from './utils/bagtag'
 import Leaderboard from './components/Leaderboard'
 import NewMatch from './components/NewMatch'
 import MatchResult from './components/MatchResult'
+import BottomNav from './components/BottomNav'
 
 function App() {
   const [players, setPlayers] = useState(playersData)
   const [view, setView] = useState('leaderboard') // 'leaderboard' | 'newmatch' | 'result'
   const [lastResult, setLastResult] = useState(null)
+  const [confirmApi, setConfirmApi] = useState(null)
 
   function handleApplyResult(result) {
     // result.rankedPlayers contains players with newTag
@@ -33,11 +35,6 @@ function App() {
           <div className="muted">HARDHOF</div>
           <div className="preview-badge">PREVIEW</div>
         </div>
-
-        <nav className="bt-nav">
-          <button className={`bt-btn ${view === 'leaderboard' ? 'bt-btn--active' : ''}`} onClick={() => setView('leaderboard')}>Tags</button>
-          <button className={`bt-btn ${view === 'newmatch' ? 'bt-btn--active' : ''}`} onClick={() => setView('newmatch')}>Battle</button>
-        </nav>
       </header>
 
       <main>
@@ -46,7 +43,7 @@ function App() {
             <h2 className="section-title">THE TAGS</h2>
             <div className="section-sub">100 tags · {players.filter(p => p.tag != null).length} assigned</div>
             <div className="tags-list">
-              <Leaderboard players={players} />
+              <Leaderboard players={players} onStartBattle={() => setView('newmatch')} />
             </div>
           </div>
         )}
@@ -61,7 +58,7 @@ function App() {
             }} onConfirm={(selectedWithScores) => {
               const result = redistributeTags(selectedWithScores)
               handleApplyResult(result)
-            }} previewResult={lastResult} />
+            }} previewResult={lastResult} registerConfirm={setConfirmApi} />
           </div>
         )}
 
@@ -73,8 +70,25 @@ function App() {
           </div>
         )}
       </main>
+      {/* Contextual action row (only on New Battle) */}
+      {view === 'newmatch' && (
+        <div className="context-action">
+          <button className="primary" disabled={!(confirmApi && confirmApi.canConfirm)} onClick={() => confirmApi && confirmApi.confirm && confirmApi.confirm()} style={{width:'100%',maxWidth:420}}>CONFIRM BATTLE</button>
+        </div>
+      )}
+
+      <BottomNav view={view} setView={(v)=>{
+        // If user taps BATTLE from RESULT, start a new battle
+        if (view === 'result' && v === 'newmatch'){
+          // clear lastResult so the NewMatch starts fresh
+          setLastResult(null)
+        }
+        setView(v)
+      }} />
     </div>
   )
 }
 
 export default App
+
+

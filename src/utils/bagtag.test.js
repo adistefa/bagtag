@@ -99,4 +99,16 @@ describe('redistributeTags (authoritative rule: score ASC, then startingTag ASC)
     expect(ex.from).toBe('Loser')
     expect(ex.to).toBe('Winner')
   })
+
+  it('9. manual finish-order input (simulate finish order by scores 0..n-1)', () => {
+    // finish order: Ale (first), Livio (second), Pascal (third)
+    const players = [
+      { id: 1, name: 'Ale', tag: 20, score: 0 },
+      { id: 2, name: 'Livio', tag: 3, score: 1 },
+      { id: 3, name: 'Pascal', tag: 7, score: 2 },
+    ]
+    const res = redistributeTags(players)
+    expect(res.rankedPlayers.map(r=>r.id)).toEqual([1,2,3])
+    expect(res.rankedPlayers.map(r=>r.newTag)).toEqual([3,7,20])
+  })
 })

@@ -14,7 +14,7 @@ function TagRow({ tag, owner }) {
   )
 }
 
-export default function Leaderboard() {
+export default function Leaderboard({ onStartBattle }) {
   const tags = Array.from({ length: 100 }, (_, i) => i + 1)
 
   const [owners, setOwners] = useState(new Map())
@@ -65,6 +65,7 @@ export default function Leaderboard() {
         const owner = owners.get(t)
         return <TagRow key={t} tag={t} owner={owner} />
       })}
+
       {!loading && owners.size === 0 && (
         <div className="empty">No assigned tags found.</div>
       )}
