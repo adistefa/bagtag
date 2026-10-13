@@ -8,10 +8,12 @@
     "test": "vitest run",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preflight:imports": "node imports/preflight.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
+    "pg": "^8.23.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

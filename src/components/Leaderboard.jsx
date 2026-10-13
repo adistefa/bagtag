@@ -1,72 +1,55 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import TagBadge from './TagBadge'
-import { supabase } from '../lib/supabase'
+import { getPlayerDiscColorClass, getPlayerInitials } from '../utils/playerIdentityVisuals'
 
-function TagRow({ tag, owner }) {
+function TagRow({ tag, owner, index }) {
   const isAssigned = !!owner
+  const displayName = isAssigned && typeof owner.name === 'string' && owner.name.trim() ? owner.name.trim() : 'Available'
+  const rowTone = index % 2 === 0 ? 'tone-pine' : 'tone-moss'
+  const discClass = isAssigned ? getPlayerDiscColorClass(owner) : ''
+  const initials = isAssigned ? getPlayerInitials(owner) : ''
+
   return (
-    <div className="tag-row">
-      <TagBadge number={tag} variant={isAssigned ? 'inactive' : 'unassigned'} />
-      <div className="tag-owner">
-        <div className="owner-name">{isAssigned ? owner.name.toUpperCase() : '—'}</div>
+    <div className={`tag-row ${rowTone} ${isAssigned ? 'is-assigned' : 'is-unassigned'}`}>
+      {isAssigned ? (
+        <div className={`player-disc ${discClass}`} aria-hidden>{initials}</div>
+      ) : (
+        <div className="available-label">Available</div>
+      )}
+      <div className="tag-owner" title={displayName}>
+        <div className="owner-name">{displayName}</div>
       </div>
+      <TagBadge className="physical-tag-badge" number={tag} size={40} variant={isAssigned ? 'inactive' : 'unassigned'} />
     </div>
   )
 }
 
-export default function Leaderboard({ onStartBattle }) {
-  const tags = Array.from({ length: 100 }, (_, i) => i + 1)
+const TOTAL_TAGS = 100
 
-  const [owners, setOwners] = useState(new Map())
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+export default function Leaderboard({ owners = new Map(), loading = false, error = null, onOwnershipStatsChange }) {
+  const tags = Array.from({ length: TOTAL_TAGS }, (_, i) => i + 1)
 
   useEffect(() => {
-    let mounted = true
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await supabase
-          .schema('bagtag')
-          .from('v_leaderboard')
-          .select('*')
-          .order('tag_number', { ascending: true })
+    if (typeof onOwnershipStatsChange !== 'function') return
 
-        if (!mounted) return
-        if (res.error) {
-          setError(res.error)
-          setOwners(new Map())
-        } else if (res.data) {
-          const map = new Map()
-          res.data.forEach((row) => {
-            // prefer display_name, fallback to username
-            const name = row.display_name && row.display_name.trim() !== '' ? row.display_name : row.username
-            map.set(Number(row.tag_number), { id: row.player_id, name })
-          })
-          setOwners(map)
-        }
-      } catch (e) {
-        console.error('Leaderboard load error', e)
-        if (mounted) setError(e)
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
-    load()
-    return () => { mounted = false }
-  }, [])
+    onOwnershipStatsChange({
+      totalTags: TOTAL_TAGS,
+      assignedCount: owners instanceof Map ? owners.size : 0,
+      loading,
+      error,
+    })
+  }, [onOwnershipStatsChange, owners, loading, error])
 
   return (
-    <div>
+    <div className="leaderboard-list">
       {loading && <div className="loader">Loading tags…</div>}
       {error && <div className="error">Unable to load leaderboard — check console.</div>}
-      {tags.map((t) => {
-        const owner = owners.get(t)
-        return <TagRow key={t} tag={t} owner={owner} />
+      {tags.map((t, index) => {
+        const owner = owners instanceof Map ? owners.get(t) : undefined
+        return <TagRow key={t} tag={t} owner={owner} index={index} />
       })}
 
-      {!loading && owners.size === 0 && (
+      {!loading && owners instanceof Map && owners.size === 0 && (
         <div className="empty">No assigned tags found.</div>
       )}
     </div>
