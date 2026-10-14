@@ -8,11 +8,11 @@ import MatchResult from './components/MatchResult'
 import HistoricalBattleHistory from './components/HistoricalBattleHistory'
 import PlayerTimeline from './components/PlayerTimeline'
 import BottomNav from './components/BottomNav'
+import ScreenTitle from './components/ScreenTitle'
+import AnnouncementTicker from './components/AnnouncementTicker'
 import { mapOwnersToBattlePlayers } from './utils/liveOwnership'
 import { getPreviewRosterOwners, PREVIEW_DATA_SOURCE } from './data/previewRoster'
 import { DEFAULT_MAIN_VIEW, HISTORY_TABS, MAIN_VIEW_ORDER } from './utils/navigation'
-
-const TOTAL_TAGS = 100
 
 function App() {
   const [players, setPlayers] = useState([])
@@ -47,19 +47,6 @@ function App() {
     }
   }, [])
 
-  const leaderboardStats = {
-    totalTags: TOTAL_TAGS,
-    assignedCount: owners.size,
-    loading: playersLoading,
-    error: playersError,
-  }
-
-  const leaderboardSummary = leaderboardStats.loading
-    ? `${leaderboardStats.totalTags} tags · loading preview roster...`
-    : leaderboardStats.error
-      ? `${leaderboardStats.totalTags} tags · preview roster unavailable`
-      : `${leaderboardStats.totalTags} tags · ${leaderboardStats.assignedCount ?? 0} assigned · ${PREVIEW_DATA_SOURCE}`
-
   function handleSelectMainView(nextView) {
     const normalized = MAIN_VIEW_ORDER.includes(nextView) ? nextView : DEFAULT_MAIN_VIEW
     setView(normalized)
@@ -84,31 +71,25 @@ function App() {
     setView('bagtags')
   }
 
+  const currentScreenTitle = view === 'battle' ? 'BATTLE' : 'BAGTAG'
+
   return (
     <div className="app-shell">
       <header className="bt-header">
-        <div className="bt-wordmark">
-          <div className="brand">BAGTAG</div>
-          <div className="muted">HARDHOF</div>
-          <div className="preview-badge">PREVIEW</div>
-        </div>
-
+        <ScreenTitle preview="PREVIEW" kicker="HARDHOF" title={currentScreenTitle} />
         <div className="bt-header-utility" aria-hidden="true" />
       </header>
 
+      <AnnouncementTicker />
+
       <main>
         <div className={`view-panel ${view === 'bagtags' ? 'is-visible' : 'is-hidden'}`}>
-          <h2 className="section-title">THE TAGS</h2>
-          <div className="section-sub">{leaderboardSummary}</div>
-          <div className="tags-list">
+          <div className="tags-list" title={PREVIEW_DATA_SOURCE}>
             <Leaderboard owners={owners} loading={playersLoading} error={playersError} />
           </div>
         </div>
 
         <div className={`view-panel ${view === 'battle' ? 'is-visible' : 'is-hidden'}`}>
-          <h2 className="section-title">NEW BATTLE</h2>
-          <div className="section-sub">Select players and enter throws</div>
-
           <div className={`battle-form-panel ${lastResult ? 'battle-form-panel--hidden' : ''}`}>
             <NewMatch
               players={players}

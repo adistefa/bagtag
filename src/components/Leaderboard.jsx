@@ -12,14 +12,14 @@ function TagRow({ tag, owner, index }) {
   return (
     <div className={`tag-row ${rowTone} ${isAssigned ? 'is-assigned' : 'is-unassigned'}`}>
       {isAssigned ? (
-        <div className={`player-disc ${discClass}`} aria-hidden>{initials}</div>
+        <div className={`player-disc ${discClass}`} aria-hidden><span className="player-disc-initials">{initials}</span></div>
       ) : (
         <div className="available-label">Available</div>
       )}
       <div className="tag-owner" title={displayName}>
         <div className="owner-name">{displayName}</div>
       </div>
-      <TagBadge className="physical-tag-badge" number={tag} size={40} variant={isAssigned ? 'inactive' : 'unassigned'} />
+      <TagBadge className="physical-tag-badge" number={tag} size={44} variant={isAssigned ? 'inactive' : 'unassigned'} />
     </div>
   )
 }

@@ -17,7 +17,7 @@ function AvailablePlayerRow({ player, onAdd }) {
       }}
     >
       <div className="available-player-left">
-        <div className={`player-disc ${discClass}`} aria-hidden>{initials}</div>
+        <div className={`player-disc ${discClass}`} aria-hidden><span className="player-disc-initials">{initials}</span></div>
         <div className="player-info">
           <div className="player-name">{player.name}</div>
         </div>
@@ -46,7 +46,7 @@ function SelectedPlayerCard({ player, onRemove }) {
 
   return (
     <div className="selected-player-card">
-      <div className={`player-disc ${discClass}`} aria-hidden>{initials}</div>
+      <div className={`player-disc ${discClass}`} aria-hidden><span className="player-disc-initials">{initials}</span></div>
       <div className="selected-player-info">
         <div className="player-name">{player.name}</div>
       </div>
@@ -56,6 +56,111 @@ function SelectedPlayerCard({ player, onRemove }) {
       </button>
     </div>
   )
+}
+
+export function moveListItemById(list, id, dir) {
+  const idx = list.indexOf(id)
+  if (idx === -1) return list
+  const nextIndex = Math.max(0, Math.min(list.length - 1, idx + dir))
+  if (nextIndex === idx) return list
+
+  const clone = [...list]
+  const [item] = clone.splice(idx, 1)
+  clone.splice(nextIndex, 0, item)
+  return clone
+}
+
+export function removeListItemById(list, id) {
+  return list.filter((entry) => entry !== id)
+}
+
+export function getNumericScoreValue(scoreMap = {}, id) {
+  return Number(scoreMap[id] ?? 0)
+}
+
+export function canConfirmBattle(selectedIds = [], resultMode = 'finish', scoreMap = {}) {
+  if (selectedIds.length < 2) return false
+  if (resultMode === 'score') {
+    return !selectedIds.some((id) => !Number.isFinite(getNumericScoreValue(scoreMap, id)))
+  }
+  return true
+}
+
+export function matchesPlayerSearch(player, query) {
+  const normalizedQuery = String(query ?? '').trim().toLowerCase()
+  if (!normalizedQuery) return true
+
+  const searchableFields = [
+    player?.name,
+    player?.display_name,
+    player?.username,
+    player?.tag != null ? String(player.tag) : '',
+  ]
+    .filter((value) => typeof value === 'string' || typeof value === 'number')
+    .map((value) => String(value).trim().toLowerCase())
+
+  return searchableFields.some((value) => value.includes(normalizedQuery))
+}
+
+export function getAvailableRosterPlayers(players, selectedIds = []) {
+  const selectedSet = new Set(selectedIds)
+  return players.filter((player) => !selectedSet.has(player.id))
+}
+
+export function getContextSummaryParts({
+  selectedLocation,
+  selectedCourse,
+  selectedCourseHoles,
+  holesPlayed,
+  eventText,
+  variantText,
+}) {
+  const locationValue = String(selectedLocation ?? '').trim() || 'Location'
+  const courseValue = String(selectedCourse ?? '').trim() || (Number.isFinite(selectedCourseHoles) && selectedCourseHoles > 0 ? `${selectedCourseHoles} holes` : 'Course')
+  const primary = `${locationValue} · ${courseValue}`
+
+  const eventValue = String(eventText ?? '').trim()
+  const variantValue = String(variantText ?? '').trim()
+  const holesDifferent = Number.isFinite(Number(holesPlayed)) && Number.isFinite(Number(selectedCourseHoles)) && Number(holesPlayed) !== Number(selectedCourseHoles)
+
+  const details = []
+
+  if (eventValue) {
+    details.push(eventValue)
+  } else if (!variantValue && !holesDifferent) {
+    details.push('No event', 'Standard round')
+  } else {
+    details.push('No event')
+  }
+
+  if (variantValue) {
+    details.push(variantValue)
+  }
+
+  if (holesDifferent) {
+    details.push(`${Number(holesPlayed)} holes`)
+  }
+
+  return {
+    primary,
+    secondary: details.length > 0 ? details.join(' · ') : 'Standard round',
+  }
+}
+
+export function getSearchMatches(players, selectedIds, query) {
+  const normalizedQuery = String(query ?? '').trim()
+  if (!normalizedQuery) return []
+
+  const selectedSet = new Set(selectedIds)
+  return players.filter((player) => !selectedSet.has(player.id) && matchesPlayerSearch(player, normalizedQuery))
+}
+
+export function getRosterMatches(players, selectedIds, query, showAllPlayers) {
+  const normalizedQuery = String(query ?? '').trim()
+  if (normalizedQuery) return []
+  if (!showAllPlayers) return []
+
+  return getAvailableRosterPlayers(players, selectedIds)
 }
 
 export default function NewMatch({
@@ -102,17 +207,23 @@ export default function NewMatch({
   const [eventText, setEventText] = useState('')
   const [variantText, setVariantText] = useState('')
   const [search, setSearch] = useState('')
+  const [showAllPlayers, setShowAllPlayers] = useState(false)
+  const [warningOpen, setWarningOpen] = useState(false)
 
   const q = search.trim().toLowerCase()
-  const filteredPlayers = q === ''
-    ? players
-    : players.filter((p) => {
-      const name = (p.name || p.display_name || p.username || '').toLowerCase()
-      return name.includes(q)
-    })
   const selectedPlayers = players.filter((p) => selected.includes(p.id))
-  const availablePlayers = filteredPlayers.filter((p) => !selected.includes(p.id))
-  const contextSummary = `${selectedLocation} · ${selectedCourse || `${selectedCourseHoles} holes`}`
+  const searchMatches = getSearchMatches(players, selected, search)
+  const rosterMatches = getRosterMatches(players, selected, search, showAllPlayers)
+  const availableRosterPlayers = getAvailableRosterPlayers(players, selected)
+  const rosterIsExhausted = availableRosterPlayers.length === 0
+  const contextSummary = getContextSummaryParts({
+    selectedLocation,
+    selectedCourse,
+    selectedCourseHoles,
+    holesPlayed,
+    eventText,
+    variantText,
+  })
 
   useEffect(() => {
     selectedRef.current = selected
@@ -162,11 +273,13 @@ export default function NewMatch({
       setFinishOrder((order) => (order.includes(id) ? order : [...order, id]))
       return [...current, id]
     })
+    setSearch('')
+    setShowAllPlayers(false)
   }
 
   function removePlayer(id) {
     setSelected((current) => current.filter((x) => x !== id))
-    setFinishOrder((order) => order.filter((x) => x !== id))
+    setFinishOrder((order) => removeListItemById(order, id))
   }
 
   // keep finishOrder in sync if selected array changes externally
@@ -219,15 +332,11 @@ export default function NewMatch({
   useEffect(() => {
     if (!registerConfirm) return
 
-    const canConfirm = () => {
-      if (selected.length < 2) return false
-      if (resultMode === 'score') {
-        return !selected.some((id) => !Number.isFinite(Number(scores[id] ?? 0)))
-      }
-      return true
+    const api = {
+      canConfirm: canConfirmBattle(selected, resultMode, scores),
+      preview: () => handlePreview(),
+      confirm: () => handleConfirm(),
     }
-
-    const api = { canConfirm: canConfirm(), preview: () => handlePreview(), confirm: () => handleConfirm() }
     registerConfirm(api)
     return () => {
       registerConfirm(null)
@@ -245,16 +354,7 @@ export default function NewMatch({
   }
 
   function moveFinish(id, dir) {
-    setFinishOrder((order) => {
-      const idx = order.indexOf(id)
-      if (idx === -1) return order
-      const to = Math.max(0, Math.min(order.length - 1, idx + dir))
-      if (to === idx) return order
-      const copy = [...order]
-      const [item] = copy.splice(idx, 1)
-      copy.splice(to, 0, item)
-      return copy
-    })
+    setFinishOrder((order) => moveListItemById(order, id, dir))
   }
 
   function commitPointerDrop(draggedId, targetId, position) {
@@ -378,144 +478,185 @@ export default function NewMatch({
     }
   }, [])
 
+  const orderedSelectedPlayers = finishOrder.filter((id) => selected.includes(id)).map((id) => players.find((player) => player.id === id)).filter(Boolean)
+  const resultsPlayers = orderedSelectedPlayers.length > 0 ? orderedSelectedPlayers : selectedPlayers
+
   return (
     <div className="new-battle-screen">
-      <div className="preview-note">
-        <div className="player-sub">Preview only. Results are not saved.</div>
-      </div>
+      <div className="battle-section battle-results-section">
+        <div className="context-headline">RESULTS</div>
 
-      <div className="battle-context-wrap">
-        <div className="battle-context">
-          <div className="context-section-head">
-            <div>
-              <div className="context-label">Battle context</div>
-              <div className="context-summary">{contextSummary}</div>
-            </div>
-            <button className="secondary context-settings-toggle" onClick={() => setSettingsOpen((open) => !open)}>
-              {settingsOpen ? 'Hide settings' : 'Edit settings'}
+        {selectedPlayers.length > 0 && (
+          <div className="battle-mode-toggle" role="tablist" aria-label="Result mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={resultMode === 'finish'}
+              className={`battle-mode-button ${resultMode === 'finish' ? 'battle-mode-button--active' : ''}`}
+              onClick={() => setResultMode('finish')}
+            >
+              FINISH ORDER
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={resultMode === 'score'}
+              className={`battle-mode-button ${resultMode === 'score' ? 'battle-mode-button--active' : ''}`}
+              onClick={() => setResultMode('score')}
+            >
+              SCORE
             </button>
           </div>
+        )}
 
-          {settingsOpen && (
-            <div className="context-settings">
-              <div className="context-row context-row-tight">
-                <div className="context-label">LOCATION</div>
-                <div className="context-value" onClick={() => setLocationOpen(!locationOpen)} role="button" tabIndex={0}>
-                  {selectedLocation}
-                </div>
-              </div>
-              {locationOpen && (
-                <div className="context-list">
-                  {locations.map((loc) => (
-                    <div key={loc} className="context-item" onClick={() => setSelectedLocation(loc)}>{loc}</div>
-                  ))}
-                  <div
-                    className="context-item add"
-                    onClick={() => {
-                      const name = window.prompt('New location name')
-                      if (name && name.trim()) {
-                        const n = name.trim()
-                        setLocations((l) => [...l, n])
-                        setCoursesByLocation((c) => ({ ...c, [n]: [{ name: '18 holes', holes: 18 }] }))
-                        setSelectedLocation(n)
-                      }
-                    }}
-                  >
-                    + Add location
-                  </div>
-                </div>
-              )}
+        {selectedPlayers.length < 2 && (
+          <div className="battle-empty-state">Add at least two players to enter results.</div>
+        )}
 
-              <div className="context-row context-row-tight">
-                <div className="context-label">COURSE</div>
-                <div className="context-value" onClick={() => setCourseOpen(!courseOpen)} role="button" tabIndex={0}>
-                  {selectedCourse || '—'}
-                </div>
-              </div>
-              {courseOpen && (
-                <div className="context-list">
-                  {(coursesByLocation[selectedLocation] || []).map((c) => (
-                    <div
-                      key={c.name}
-                      className="context-item"
-                      onClick={() => {
-                        setSelectedCourse(c.name)
-                        setSelectedCourseHoles(c.holes)
-                        setHolesPlayed(c.holes)
-                      }}
-                    >
-                      {c.name}
+        {selectedPlayers.length > 0 && (
+          <div className="results-player-list">
+            {resultsPlayers.map((player, index) => {
+              const isFinishMode = resultMode === 'finish'
+              const scoreValue = getNumericScoreValue(scores, player.id)
+
+              return (
+                <div
+                  key={player.id}
+                  className={`battle-player-row ${isFinishMode ? 'battle-player-row--finish' : 'battle-player-row--score'}`}
+                  data-player-key={String(player.id)}
+                >
+                  <div className="battle-player-header">
+                    <div className="battle-player-identity">
+                      <div className={`player-disc ${getPlayerDiscColorClass(player)}`} aria-hidden>
+                        <span className="player-disc-initials">{getPlayerInitials(player)}</span>
+                      </div>
+
+                      <div className="battle-player-meta">
+                        <div className="battle-player-name-line">
+                          <div className="player-name">{player.name}</div>
+                          <TagBadge className="player-tag-badge" number={player.tag} size={28} variant="inactive" />
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                  <div
-                    className="context-item add"
-                    onClick={() => {
-                      const name = window.prompt('New course name (e.g. "Front 9")')
-                      if (!name || !name.trim()) return
-                      const holesStr = window.prompt('Holes for this course (number)')
-                      const holesNum = Number(holesStr)
-                      const entry = {
-                        name: name.trim(),
-                        holes: Number.isFinite(holesNum) && holesNum > 0 ? holesNum : 18,
-                      }
-                      setCoursesByLocation((c) => ({ ...c, [selectedLocation]: [...(c[selectedLocation] || []), entry] }))
-                      setSelectedCourse(entry.name)
-                      setSelectedCourseHoles(entry.holes)
-                      setHolesPlayed(entry.holes)
-                    }}
-                  >
-                    + Add course
+
+                    <button
+                      type="button"
+                      className="battle-player-remove"
+                      aria-label={`Remove ${player.name}`}
+                      onClick={() => removePlayer(player.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className={`battle-player-controls ${isFinishMode ? 'battle-player-controls--finish' : 'battle-player-controls--score'}`}>
+                    {isFinishMode ? (
+                      <>
+                        <div className="battle-finish-position">POS {index + 1}</div>
+                        <div className="battle-order-actions">
+                          <button
+                            type="button"
+                            className="score-btn"
+                            aria-label={`Move ${player.name} up`}
+                            onClick={(e) => { e.stopPropagation(); moveFinish(player.id, -1) }}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            className="score-btn"
+                            aria-label={`Move ${player.name} down`}
+                            onClick={(e) => { e.stopPropagation(); moveFinish(player.id, +1) }}
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="score-control" onClick={(e) => e.stopPropagation()}>
+                        <button className="score-btn" aria-label={`Decrease ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) - 1) }}>−</button>
+                        <div className="score-display">{(scores[player.id] === 0 || scores[player.id] === '0' || scores[player.id] == null) ? 'E' : (Number(scoreValue) > 0 ? `+${Number(scoreValue)}` : String(Number(scoreValue)))}</div>
+                        <button className="score-btn" aria-label={`Increase ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) + 1) }}>+</button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+              )
+            })}
+          </div>
+        )}
 
-              <div className="context-row context-row-tight">
-                <div className="context-label">HOLES PLAYED</div>
-                <div className="context-value">
-                  <input
-                    className="battle-field battle-field--number"
-                    type="number"
-                    value={holesPlayed}
-                    onChange={(e) => setHolesPlayed(Number(e.target.value || 0))}
-                  />
+        {previewResult && (
+          <div className="battle-preview-panel" style={{ marginTop: 16 }}>
+            <h3 style={{ margin: '6px 0' }}>Preview</h3>
+            <div style={{ borderTop: '1px solid var(--border)' }}>
+              {previewResult.rankedPlayers.map((r) => (
+                <div key={r.id} className="result-player">
+                  <div className="result-left">
+                    <div className="result-pos">{r.position}</div>
+                    <div className="result-info">
+                      <div className="result-name">{r.name}</div>
+                      <div className="result-meta">score {r.score}</div>
+                    </div>
+                  </div>
+                  <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>
                 </div>
-              </div>
-
-              <div className="context-row context-row-tight context-row-optional">
-                <div className="context-label">EVENT · OPTIONAL</div>
-                <div className="context-value">
-                  <input className="battle-field" type="text" placeholder="None" value={eventText} onChange={(e) => setEventText(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="context-row context-row-optional">
-                <div className="context-label">VARIANT · OPTIONAL</div>
-                <div className="context-value">
-                  <input
-                    className="battle-field"
-                    type="text"
-                    placeholder="e.g. T4 / T8 closed"
-                    value={variantText}
-                    onChange={(e) => setVariantText(e.target.value)}
-                  />
-                </div>
-              </div>
+              ))}
             </div>
-          )}
-        </div>
+
+            <div className="exchanges">
+              <h4 style={{ margin: '8px 0' }}>Physical exchanges</h4>
+              {previewResult.exchanges.length === 0 ? (
+                <div className="player-sub">All players keep their tags.</div>
+              ) : (
+                previewResult.exchanges.map((ex, i) => (
+                  <div key={i} className="exchange">
+                    <div className="exchange-num">#{String(ex.tag)}</div>
+                    <div className="exchange-fromto">
+                      <div style={{ fontWeight: 700 }}>{ex.from} → {ex.to}</div>
+                      <div className="exchange-from">hand over</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="battle-section battle-player-section">
+        <div className="context-headline">ADD PLAYERS</div>
 
         <div className="search-area">
-          <div className="context-headline">PLAYER SELECTION</div>
-          <div className="search-row">
-            <input className="search-input battle-search-input" placeholder="Search players" value={search} onChange={(e) => setSearch(e.target.value)} />
-            {search.trim() !== '' && (
-              <button className="secondary battle-clear-btn" onClick={() => setSearch('')}>Clear</button>
-            )}
-          </div>
-          {q !== '' && availablePlayers.length === 0 && (
-            <div className="search-empty">No players match your search.</div>
+          <input
+            id="battle-player-search"
+            className="search-input battle-search-input"
+            placeholder="Search players…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search players"
+          />
+
+          {search.trim() !== '' && (
+            <button type="button" className="secondary battle-clear-btn" onClick={() => setSearch('')}>Clear</button>
+          )}
+
+          {q !== '' && searchMatches.length === 0 && (
+            <div className="search-empty">No matching players found.</div>
           )}
         </div>
+
+        {!playersLoading && !playersError && players.length > 0 && q === '' && (
+          <button
+            type="button"
+            className="roster-toggle"
+            aria-expanded={showAllPlayers}
+            onClick={() => setShowAllPlayers((open) => !open)}
+          >
+            {showAllPlayers ? 'Hide all players' : 'Show all players'}
+            <span aria-hidden="true">{showAllPlayers ? '▴' : '▾'}</span>
+          </button>
+        )}
 
         <div className="player-results">
           {playersLoading && <div className="loader">Loading live players…</div>}
@@ -524,151 +665,175 @@ export default function NewMatch({
             <div className="empty">No assigned players found in live ownership.</div>
           )}
 
-          {availablePlayers.map((p) => (
+          {q !== '' && searchMatches.map((p) => (
             <AvailablePlayerRow key={p.id} player={p} onAdd={addPlayer} />
           ))}
-          {availablePlayers.length === 0 && selectedPlayers.length > 0 && q === '' && (
+
+          {q === '' && rosterMatches.map((p) => (
+            <AvailablePlayerRow key={p.id} player={p} onAdd={addPlayer} />
+          ))}
+
+          {q === '' && !showAllPlayers && rosterIsExhausted && (
             <div className="search-empty search-empty-all">All players are selected.</div>
           )}
         </div>
 
         {!playersLoading && !playersError && dataInconsistencies.length > 0 && (
-          <div className="error" style={{ marginTop: 8 }}>
-            Some live rows were skipped due to inconsistent player ownership data.
+          <div className="ownership-warning" role="status" aria-live="polite">
+            <button
+              type="button"
+              className="ownership-warning-toggle"
+              aria-expanded={warningOpen}
+              aria-controls="ownership-warning-details"
+              onClick={() => setWarningOpen((open) => !open)}
+            >
+              <span aria-hidden="true" className="ownership-warning-icon">⚠</span>
+              <span className="ownership-warning-label">Some roster entries could not be loaded.</span>
+              <span className="ownership-warning-chevron" aria-hidden="true">{warningOpen ? '▾' : '▸'}</span>
+            </button>
+
+            {warningOpen && (
+              <div id="ownership-warning-details" className="ownership-warning-details">
+                {dataInconsistencies.map((entry, index) => (
+                  <div key={`${entry}-${index}`} className="ownership-warning-item">{entry}</div>
+                ))}
+              </div>
+            )}
           </div>
         )}
-
-        <div className="selected-panel">
-          <div className="selected-head">
-            <div className="context-headline">SELECTED PLAYERS</div>
-            <div className="player-sub">{selectedPlayers.length} selected</div>
-          </div>
-          {selectedPlayers.length === 0 ? (
-            <div className="selected-empty">Select at least two players to start a battle.</div>
-          ) : (
-            <div className="selected-list">
-              {selectedPlayers.map((player) => (
-                <SelectedPlayerCard key={player.id} player={player} onRemove={removePlayer} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="result-entry-panel">
-          <div className="result-mode-row">
-            <div className="context-headline">RESULT ENTRY</div>
-            <div className="result-mode-actions">
-              <button className={`bt-btn ${resultMode === 'finish' ? 'bt-btn--active' : ''}`} onClick={() => setResultMode('finish')}>FINISH ORDER</button>
-              <button className={`bt-btn ${resultMode === 'score' ? 'bt-btn--active' : ''}`} onClick={() => setResultMode('score')}>SCORE</button>
-            </div>
-          </div>
-
-          {resultMode === 'finish' && (
-            <div style={{ marginBottom: 8 }}>
-              <div className="player-sub" style={{ marginBottom: 8 }}>
-                Drag and drop works on desktop; on touch devices use the arrow buttons to set final position.
-              </div>
-              <div className="finish-list">
-                {finishOrder.filter((id) => selected.includes(id)).map((id, idx) => {
-                  const p = players.find((pp) => pp.id === id)
-                  if (!p) return null
-
-                  const isActiveDrag = draggedFinishId === id
-                  const isDropTarget = dropTargetFinishId === id && draggedFinishId != null && draggedFinishId !== id
-                  const dropClass = isDropTarget ? (dropPosition === 'after' ? 'drop-after' : 'drop-before') : ''
-                  return (
-                    <div
-                      key={id}
-                      className={`finish-row ${isActiveDrag ? 'is-drag-active' : ''} ${dropClass}`.trim()}
-                      data-player-key={String(id)}
-                    >
-                      <div className="pos-badge">{idx + 1}</div>
-                      <div
-                        className={`drag-handle ${isActiveDrag ? 'drag-handle--active' : ''}`.trim()}
-                        onPointerDown={(e) => beginPointerDrag(e, id)}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`drag ${p.name}`}
-                        onKeyDown={(e) => {
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            moveFinish(id, -1)
-                          } else if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            moveFinish(id, +1)
-                          }
-                        }}
-                      >
-                        ☰
-                      </div>
-                      <div style={{ flex: 1, fontWeight: 700 }}>{p.name}</div>
-                      <TagBadge className="player-tag-badge" number={p.tag} size={34} variant="inactive" />
-                      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 8 }}>
-                        <button className="score-btn" aria-label={`move up ${p.name}`} onClick={(e) => { e.stopPropagation(); moveFinish(id, -1) }}>▲</button>
-                        <button className="score-btn" aria-label={`move down ${p.name}`} onClick={(e) => { e.stopPropagation(); moveFinish(id, +1) }}>▼</button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {resultMode === 'score' && (
-            <div className="score-entry-list">
-              {selectedPlayers.map((p) => (
-                <div key={p.id} className="score-entry-row">
-                  <div className={`player-disc ${getPlayerDiscColorClass(p)}`} aria-hidden>{getPlayerInitials(p)}</div>
-                  <div className="score-entry-name">{p.name}</div>
-                  <TagBadge className="player-tag-badge" number={p.tag} size={34} variant="inactive" />
-                  <div className="score-control" onClick={(e) => e.stopPropagation()}>
-                    <button className="score-btn" aria-label={`decrease ${p.name} score`} onClick={(e) => { e.stopPropagation(); setScore(p.id, Number(scores[p.id] ?? 0) - 1) }}>−</button>
-                    <div className="score-display">{(scores[p.id] === 0 || scores[p.id] === '0' || scores[p.id] == null) ? 'E' : (Number(scores[p.id]) > 0 ? `+${Number(scores[p.id])}` : String(Number(scores[p.id])))}</div>
-                    <button className="score-btn" aria-label={`increase ${p.name} score`} onClick={(e) => { e.stopPropagation(); setScore(p.id, Number(scores[p.id] ?? 0) + 1) }}>+</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
-      {previewResult && (
-        <div style={{ marginTop: 16 }}>
-          <h3 style={{ margin: '6px 0' }}>Preview</h3>
-          <div style={{ borderTop: '1px solid var(--border)' }}>
-            {previewResult.rankedPlayers.map((r) => (
-              <div key={r.id} className="result-player">
-                <div className="result-left">
-                  <div className="result-pos">{r.position}</div>
-                  <div className="result-info">
-                    <div className="result-name">{r.name}</div>
-                    <div className="result-meta">score {r.score}</div>
-                  </div>
-                </div>
-                <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>
+      <div className="battle-section battle-context-section">
+        <div className="context-headline">BATTLE CONTEXT</div>
+        <div className="battle-context-wrap">
+          <div className="battle-context">
+            <div className="battle-context-summary-card" aria-live="polite">
+              <div className="battle-context-summary-copy">
+                <div className="context-summary-primary">{contextSummary.primary}</div>
+                <div className="context-summary-secondary">{contextSummary.secondary}</div>
               </div>
-            ))}
-          </div>
 
-          <div className="exchanges">
-            <h4 style={{ margin: '8px 0' }}>Physical exchanges</h4>
-            {previewResult.exchanges.length === 0 ? (
-              <div className="player-sub">All players keep their tags.</div>
-            ) : (
-              previewResult.exchanges.map((ex, i) => (
-                <div key={i} className="exchange">
-                  <div className="exchange-num">#{String(ex.tag)}</div>
-                  <div className="exchange-fromto">
-                    <div style={{ fontWeight: 700 }}>{ex.from} → {ex.to}</div>
-                    <div className="exchange-from">hand over</div>
+              <button
+                type="button"
+                className="context-summary-toggle"
+                aria-expanded={settingsOpen}
+                aria-controls="battle-context-settings"
+                onClick={() => setSettingsOpen((open) => !open)}
+              >
+                <span>{settingsOpen ? 'DONE' : 'EDIT'}</span>
+                <span aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
+              </button>
+            </div>
+
+            {settingsOpen && (
+              <div id="battle-context-settings" className="context-settings">
+                <div className="context-row context-row-tight">
+                  <div className="context-label">LOCATION</div>
+                  <div className="context-value" onClick={() => setLocationOpen(!locationOpen)} role="button" tabIndex={0}>
+                    {selectedLocation}
                   </div>
                 </div>
-              ))
+                {locationOpen && (
+                  <div className="context-list">
+                    {locations.map((loc) => (
+                      <div key={loc} className="context-item" onClick={() => setSelectedLocation(loc)}>{loc}</div>
+                    ))}
+                    <div
+                      className="context-item add"
+                      onClick={() => {
+                        const name = window.prompt('New location name')
+                        if (name && name.trim()) {
+                          const n = name.trim()
+                          setLocations((l) => [...l, n])
+                          setCoursesByLocation((c) => ({ ...c, [n]: [{ name: '18 holes', holes: 18 }] }))
+                          setSelectedLocation(n)
+                        }
+                      }}
+                    >
+                      + Add location
+                    </div>
+                  </div>
+                )}
+
+                <div className="context-row context-row-tight">
+                  <div className="context-label">COURSE</div>
+                  <div className="context-value" onClick={() => setCourseOpen(!courseOpen)} role="button" tabIndex={0}>
+                    {selectedCourse || '—'}
+                  </div>
+                </div>
+                {courseOpen && (
+                  <div className="context-list">
+                    {(coursesByLocation[selectedLocation] || []).map((c) => (
+                      <div
+                        key={c.name}
+                        className="context-item"
+                        onClick={() => {
+                          setSelectedCourse(c.name)
+                          setSelectedCourseHoles(c.holes)
+                          setHolesPlayed(c.holes)
+                        }}
+                      >
+                        {c.name}
+                      </div>
+                    ))}
+                    <div
+                      className="context-item add"
+                      onClick={() => {
+                        const name = window.prompt('New course name (e.g. "Front 9")')
+                        if (!name || !name.trim()) return
+                        const holesStr = window.prompt('Holes for this course (number)')
+                        const holesNum = Number(holesStr)
+                        const entry = {
+                          name: name.trim(),
+                          holes: Number.isFinite(holesNum) && holesNum > 0 ? holesNum : 18,
+                        }
+                        setCoursesByLocation((c) => ({ ...c, [selectedLocation]: [...(c[selectedLocation] || []), entry] }))
+                        setSelectedCourse(entry.name)
+                        setSelectedCourseHoles(entry.holes)
+                        setHolesPlayed(entry.holes)
+                      }}
+                    >
+                      + Add course
+                    </div>
+                  </div>
+                )}
+
+                <div className="context-row context-row-tight">
+                  <div className="context-label">HOLES PLAYED</div>
+                  <div className="context-value">
+                    <input
+                      className="battle-field battle-field--number"
+                      type="number"
+                      value={holesPlayed}
+                      onChange={(e) => setHolesPlayed(Number(e.target.value || 0))}
+                    />
+                  </div>
+                </div>
+
+                <div className="context-row context-row-tight context-row-optional">
+                  <div className="context-label">EVENT · OPTIONAL</div>
+                  <div className="context-value">
+                    <input className="battle-field" type="text" placeholder="None" value={eventText} onChange={(e) => setEventText(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="context-row context-row-optional">
+                  <div className="context-label">VARIANT · OPTIONAL</div>
+                  <div className="context-value">
+                    <input
+                      className="battle-field"
+                      type="text"
+                      placeholder="e.g. T4 / T8 closed"
+                      value={variantText}
+                      onChange={(e) => setVariantText(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
