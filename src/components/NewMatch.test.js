@@ -3,6 +3,7 @@ import {
   RESULT_MODE_LABELS,
   canConfirmBattle,
   deriveRankingOrderFromScores,
+  formatBattleScoreDisplay,
   getRankingScoreValidation,
   getScoreEntryState,
   moveListItemById,
@@ -132,6 +133,31 @@ describe('finish-order interaction helpers', () => {
     expect(state.isAllBlank).toBe(true)
     const derived = deriveRankingOrderFromScores(getPlayers([1, 2, 3]), { 1: '', 2: '', 3: '' }, [1, 2, 3])
     expect(derived.status).toBe('incomplete')
+  })
+
+  it('displays explicit zero score as E', () => {
+    const formatted = formatBattleScoreDisplay(0)
+    expect(formatted.text).toBe('E')
+    expect(formatted.ariaLabel).toBe('Even')
+    expect(formatted.isBlank).toBe(false)
+  })
+
+  it('keeps blank score display separate from E', () => {
+    const formatted = formatBattleScoreDisplay('')
+    expect(formatted.text).toBe('—')
+    expect(formatted.isBlank).toBe(true)
+  })
+
+  it('displays negative and positive scores with expected signs', () => {
+    expect(formatBattleScoreDisplay(-3).text).toBe('-3')
+    expect(formatBattleScoreDisplay(3).text).toBe('+3')
+  })
+
+  it('does not alter underlying numeric value when formatting score', () => {
+    const score = 0
+    const formatted = formatBattleScoreDisplay(score)
+    expect(formatted.text).toBe('E')
+    expect(score).toBe(0)
   })
 
   it('keeps score mode confirmation compatibility helper for minimum participant count', () => {

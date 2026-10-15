@@ -213,7 +213,7 @@ body{
 .selected-player-info{display:flex;flex-direction:column;min-width:0;flex:1}
 .selected-remove{padding:7px 10px;border-radius:8px;border:1px solid var(--border-control);background:transparent;color:var(--text-primary);font-size:12px;font-weight:700;min-height:36px}
 
-.results-player-list{display:flex;flex-direction:column;gap:8px}
+.results-player-list{display:flex;flex-direction:column;gap:8px;max-height:min(42vh, 320px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-right:2px}
 .battle-player-row{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:10px;background:rgba(8,26,19,0.44);border:1px solid rgba(246,246,241,0.12)}
 .battle-player-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%}
 .battle-player-identity{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0}

@@ -136,6 +136,39 @@ function toFiniteScoreOrNull(value) {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+export function formatBattleScoreDisplay(value) {
+  const numeric = toFiniteScoreOrNull(value)
+  if (numeric == null) {
+    return {
+      text: '—',
+      ariaLabel: 'No score entered',
+      isBlank: true,
+    }
+  }
+
+  if (numeric === 0) {
+    return {
+      text: 'E',
+      ariaLabel: 'Even',
+      isBlank: false,
+    }
+  }
+
+  if (numeric > 0) {
+    return {
+      text: `+${numeric}`,
+      ariaLabel: `Plus ${numeric}`,
+      isBlank: false,
+    }
+  }
+
+  return {
+    text: String(numeric),
+    ariaLabel: String(numeric),
+    isBlank: false,
+  }
+}
+
 function hasKnownStartingTag(player) {
   const rawTag = player?.tag
   if (rawTag === '' || rawTag == null) return false
@@ -953,10 +986,11 @@ export default function NewMatch({
         )}
 
         {!isSearchExperimentActive && selectedPlayers.length > 0 && (
-          <div className="results-player-list" role="list" aria-label="Ranking players">
+          <div className="results-player-list" role="list" aria-label="Ranking players" tabIndex={0}>
             {resultsPlayers.map((player, index) => {
               const isFinishMode = resultMode === 'finish'
               const scoreValue = getNumericScoreValue(scores, player.id)
+              const scoreDisplay = formatBattleScoreDisplay(scores[player.id])
               const isFirstPosition = index === 0
               const isLastPosition = index === resultsPlayers.length - 1
               const isDragActive = isFinishMode && draggedFinishId === player.id
@@ -1038,7 +1072,7 @@ export default function NewMatch({
                     ) : (
                       <div className="score-control" onClick={(e) => e.stopPropagation()}>
                         <button className="score-btn" aria-label={`Decrease ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) - 1) }}>−</button>
-                        <div className={`score-display ${toFiniteScoreOrNull(scores[player.id]) == null ? 'score-display--blank' : ''}`}>{toFiniteScoreOrNull(scores[player.id]) == null ? '—' : String(Number(scoreValue))}</div>
+                        <div className={`score-display ${scoreDisplay.isBlank ? 'score-display--blank' : ''}`} aria-label={scoreDisplay.ariaLabel}>{scoreDisplay.text}</div>
                         <button className="score-btn" aria-label={`Increase ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) + 1) }}>+</button>
                       </div>
                     )}
