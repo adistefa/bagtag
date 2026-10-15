@@ -16,7 +16,7 @@ export default function MatchResult({ result }) {
               <div className="result-pos">{r.position}</div>
               <div className="result-info">
                 <div className="result-name">{r.name}</div>
-                <div className="result-meta">score {r.score}</div>
+                <div className="result-meta">{r.score == null ? 'ranking entry' : `${r.score} throws`}</div>
               </div>
             </div>
             <div className="tag-change">

@@ -176,6 +176,15 @@ body{
 .battle-mode-button{flex:1;min-height:40px;border:none;border-radius:8px;background:transparent;color:var(--text-primary);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;cursor:pointer}
 .battle-mode-button--active{background:var(--accent);color:var(--text-on-accent)}
 
+.ranking-sync-warning{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,167,38,0.45);background:rgba(255,180,0,0.06)}
+.ranking-sync-warning-head{display:flex;align-items:center;gap:8px}
+.ranking-sync-warning-icon{font-size:13px;color:var(--warning, #f7b955);flex-shrink:0}
+.ranking-sync-warning-title{font-size:12px;font-weight:800;letter-spacing:0.02em;color:var(--text-primary)}
+.ranking-sync-warning-body{margin-top:4px;font-size:11px;line-height:1.35;color:var(--text-secondary)}
+.ranking-sync-warning-actions{margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ranking-sync-warning-action,.ranking-sync-warning-clear{padding:0;border:none;background:transparent;color:var(--disc-mint);font-size:11px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer}
+.ranking-sync-warning-clear{color:var(--text-secondary)}
+
 .search-area{display:flex;flex-direction:column;gap:8px;padding:0;background:transparent;border:none}
 .search-row{display:flex;gap:8px;align-items:center}
 .battle-search-input{min-height:44px;background:rgba(8,26,19,0.52);border-color:var(--border-control);padding:10px 12px}
@@ -241,6 +250,7 @@ body{
 .score-btn{width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-primary);font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .score-btn:active{transform:translateY(1px)}
 .score-display{min-width:38px;text-align:center;font-size:16px;font-weight:800}
+.score-display--blank{color:var(--text-secondary)}
 .finish-move-btn{width:44px;height:44px;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .drag-handle{width:44px;height:44px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--text-secondary);cursor:grab;touch-action:none;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none}
 .drag-handle--active{cursor:grabbing;color:var(--accent)}
@@ -269,6 +279,8 @@ body{
 .selected-remove:focus-visible,
 .score-btn:focus-visible,
 .drag-handle:focus-visible,
+.ranking-sync-warning-action:focus-visible,
+.ranking-sync-warning-clear:focus-visible,
 .search-input:focus-visible,
 .battle-field:focus-visible {
   outline: 2px solid var(--focus-ring);

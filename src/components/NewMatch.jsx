@@ -114,15 +114,241 @@ export function reorderFinishOrderByDrop(order = [], selected = [], draggedId, t
 }
 
 export function getNumericScoreValue(scoreMap = {}, id) {
-  return Number(scoreMap[id] ?? 0)
+  const rawValue = scoreMap[id]
+  if (rawValue === '' || rawValue == null) return 0
+
+  const numeric = Number(rawValue)
+  return Number.isFinite(numeric) ? numeric : 0
 }
 
-export function canConfirmBattle(selectedIds = [], resultMode = 'finish', scoreMap = {}) {
-  if (selectedIds.length < 2) return false
-  if (resultMode === 'score') {
-    return !selectedIds.some((id) => !Number.isFinite(getNumericScoreValue(scoreMap, id)))
+export const RESULT_MODE_LABELS = {
+  finish: 'RANKING',
+  score: 'SCORES',
+}
+
+function isBlankScoreValue(value) {
+  return value === '' || value == null
+}
+
+function toFiniteScoreOrNull(value) {
+  if (isBlankScoreValue(value)) return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function hasKnownStartingTag(player) {
+  const rawTag = player?.tag
+  if (rawTag === '' || rawTag == null) return false
+  return Number.isFinite(Number(rawTag))
+}
+
+export function canConfirmBattle(selectedIds = []) {
+  return selectedIds.length >= 2
+}
+
+export function getScoreEntryState(selectedIds = [], scoreMap = {}) {
+  const scoredIds = []
+  const blankIds = []
+  const invalidIds = []
+
+  selectedIds.forEach((id) => {
+    const raw = scoreMap[id]
+    if (isBlankScoreValue(raw)) {
+      blankIds.push(id)
+      return
+    }
+
+    if (Number.isFinite(Number(raw))) {
+      scoredIds.push(id)
+      return
+    }
+
+    invalidIds.push(id)
+  })
+
+  const isAllBlank = blankIds.length === selectedIds.length
+  const isComplete = scoredIds.length === selectedIds.length && invalidIds.length === 0
+  const isPartial = !isAllBlank && !isComplete
+
+  return {
+    scoredIds,
+    blankIds,
+    invalidIds,
+    isAllBlank,
+    isComplete,
+    isPartial,
   }
-  return true
+}
+
+export function deriveRankingOrderFromScores(selectedPlayers = [], scoreMap = {}, selectedOrder = []) {
+  const selectedIds = selectedPlayers.map((player) => player.id)
+  const scoreState = getScoreEntryState(selectedIds, scoreMap)
+  if (!scoreState.isComplete) {
+    return { status: 'incomplete', orderedIds: selectedOrder }
+  }
+
+  const byId = new Map(selectedPlayers.map((player) => [player.id, player]))
+  const orderIndex = new Map(selectedIds.map((id, index) => [id, index]))
+
+  const tiedGroups = new Map()
+  selectedIds.forEach((id) => {
+    const score = Number(scoreMap[id])
+    const key = String(score)
+    const list = tiedGroups.get(key) || []
+    list.push(id)
+    tiedGroups.set(key, list)
+  })
+
+  for (const groupIds of tiedGroups.values()) {
+    if (groupIds.length < 2) continue
+    const missingTagPlayers = groupIds
+      .map((id) => byId.get(id))
+      .filter((player) => !hasKnownStartingTag(player))
+
+    if (missingTagPlayers.length > 0) {
+      return {
+        status: 'tie-unresolved',
+        orderedIds: selectedOrder,
+        players: missingTagPlayers.map((player) => player?.name).filter(Boolean),
+      }
+    }
+  }
+
+  const orderedIds = [...selectedIds].sort((a, b) => {
+    const scoreA = Number(scoreMap[a])
+    const scoreB = Number(scoreMap[b])
+    if (scoreA !== scoreB) return scoreA - scoreB
+
+    const playerA = byId.get(a)
+    const playerB = byId.get(b)
+    const tagA = Number(playerA?.tag)
+    const tagB = Number(playerB?.tag)
+    if (tagA !== tagB) return tagA - tagB
+
+    return (orderIndex.get(a) ?? 0) - (orderIndex.get(b) ?? 0)
+  })
+
+  return { status: 'complete', orderedIds }
+}
+
+export function getRankingScoreValidation(selectedPlayers = [], finishOrder = [], scoreMap = {}) {
+  const selectedIds = selectedPlayers.map((player) => player.id)
+  const normalizedOrder = syncFinishOrderWithSelected(finishOrder, selectedIds)
+  const byId = new Map(selectedPlayers.map((player) => [player.id, player]))
+
+  if (selectedIds.length < 2) {
+    return {
+      canConfirm: false,
+      disabledReason: 'Select at least 2 players.',
+      normalizedOrder,
+      scoreState: getScoreEntryState(selectedIds, scoreMap),
+      warning: null,
+      derivedOrder: null,
+      modeKind: 'invalid',
+    }
+  }
+
+  const scoreState = getScoreEntryState(selectedIds, scoreMap)
+  if (scoreState.invalidIds.length > 0) {
+    return {
+      canConfirm: false,
+      disabledReason: 'Scores must be numeric values.',
+      normalizedOrder,
+      scoreState,
+      warning: {
+        type: 'invalid-score',
+        heading: 'Some scores are invalid',
+        body: 'Enter numeric throw counts for all scored players.',
+        action: 'edit-scores',
+      },
+      derivedOrder: null,
+      modeKind: 'invalid',
+    }
+  }
+
+  if (scoreState.isAllBlank) {
+    return {
+      canConfirm: true,
+      disabledReason: null,
+      normalizedOrder,
+      scoreState,
+      warning: null,
+      derivedOrder: null,
+      modeKind: 'ranking-only',
+    }
+  }
+
+  if (scoreState.isPartial) {
+    return {
+      canConfirm: false,
+      disabledReason: 'Complete all scores or clear partial score entry.',
+      normalizedOrder,
+      scoreState,
+      warning: {
+        type: 'partial-score',
+        heading: 'Score entry is incomplete',
+        body: 'Finish all throw counts or clear entered scores before confirming a ranking-only battle.',
+        action: 'edit-scores',
+      },
+      derivedOrder: null,
+      modeKind: 'partial',
+    }
+  }
+
+  const derived = deriveRankingOrderFromScores(selectedPlayers, scoreMap, normalizedOrder)
+  if (derived.status === 'tie-unresolved') {
+    const unresolvedNames = derived.players?.slice(0, 2).join(' and ') || 'some players'
+    return {
+      canConfirm: false,
+      disabledReason: 'Tie-break requires known starting tags.',
+      normalizedOrder,
+      scoreState,
+      warning: {
+        type: 'tie-unresolved',
+        heading: 'Tie-break cannot be resolved',
+        body: `Equal throws for ${unresolvedNames}, but at least one starting tag is missing.`,
+        action: 'edit-scores',
+      },
+      derivedOrder: null,
+      modeKind: 'tie-unresolved',
+    }
+  }
+
+  const derivedOrder = derived.orderedIds || normalizedOrder
+  const mismatchIndex = normalizedOrder.findIndex((id, idx) => id !== derivedOrder[idx])
+  if (mismatchIndex !== -1) {
+    const rankedPlayer = byId.get(normalizedOrder[mismatchIndex])
+    const expectedPlayer = byId.get(derivedOrder[mismatchIndex])
+    const rankedThrows = toFiniteScoreOrNull(scoreMap[rankedPlayer?.id])
+    const expectedThrows = toFiniteScoreOrNull(scoreMap[expectedPlayer?.id])
+    const rankedName = rankedPlayer?.name || 'This player'
+    const expectedName = expectedPlayer?.name || 'another player'
+
+    return {
+      canConfirm: false,
+      disabledReason: 'Ranking and scores do not match.',
+      normalizedOrder,
+      scoreState,
+      warning: {
+        type: 'score-conflict',
+        heading: "Ranking and scores don't match",
+        body: `${rankedName} has ${rankedThrows} throws, ${expectedName} has ${expectedThrows}. ${expectedName} should rank higher.`,
+        action: 'edit-scores',
+      },
+      derivedOrder,
+      modeKind: 'scored-conflict',
+    }
+  }
+
+  return {
+    canConfirm: true,
+    disabledReason: null,
+    normalizedOrder,
+    scoreState,
+    warning: null,
+    derivedOrder,
+    modeKind: 'scored-valid',
+  }
 }
 
 export function matchesPlayerSearch(player, query) {
@@ -230,6 +456,7 @@ export default function NewMatch({
   const dropPositionRef = useRef('before')
   const dragPointerRef = useRef({ active: false, pointerId: null, draggedId: null })
   const dragHandleRef = useRef(null)
+  const scoreEditOriginRef = useRef(false)
 
   // Local-only battle context (preview mode)
   const [locations, setLocations] = useState(['Hardhof', 'Sibbe', 'Hinterhausen'])
@@ -377,7 +604,7 @@ export default function NewMatch({
     setSelected((current) => {
       if (current.includes(id)) return current
 
-      setScores((prev) => ({ ...prev, [id]: prev[id] ?? 0 }))
+      setScores((prev) => ({ ...prev, [id]: prev[id] ?? '' }))
       setFinishOrder((order) => (order.includes(id) ? order : [...order, id]))
       return [...current, id]
     })
@@ -403,38 +630,81 @@ export default function NewMatch({
 
   function setScore(id, v) {
     const n = v === '' ? '' : Number(v)
+    scoreEditOriginRef.current = true
     setScores((s) => ({ ...s, [id]: n }))
   }
 
+  const rankingValidation = getRankingScoreValidation(selectedPlayers, finishOrder, scores)
+
+  useEffect(() => {
+    if (!scoreEditOriginRef.current) return
+    scoreEditOriginRef.current = false
+
+    if (!rankingValidation.scoreState.isComplete) return
+    if (rankingValidation.modeKind === 'tie-unresolved') return
+    if (!rankingValidation.derivedOrder || rankingValidation.derivedOrder.length === 0) return
+
+    setFinishOrder((order) => {
+      const selectedSet = new Set(selectedRef.current)
+      const unselected = order.filter((id) => !selectedSet.has(id))
+      return [...rankingValidation.derivedOrder, ...unselected]
+    })
+  }, [scores, rankingValidation])
+
+  function clearSelectedScores() {
+    setScores((current) => {
+      const next = { ...current }
+      selectedRef.current.forEach((id) => {
+        next[id] = ''
+      })
+      return next
+    })
+  }
+
   function gatherSelected() {
-    if (resultMode === 'finish') {
-      // Use finishOrder as authoritative order. Assign synthetic scores 0..n-1 so redistribution sorts correctly.
-      const ordered = finishOrder.filter((id) => selected.includes(id))
-      return ordered.map((id, idx) => ({ ...players.find((p) => p.id === id), score: idx }))
+    const ordered = rankingValidation.normalizedOrder
+      .map((id) => players.find((player) => player.id === id))
+      .filter(Boolean)
+
+    if (rankingValidation.modeKind === 'ranking-only') {
+      return {
+        entryMode: 'ranking',
+        players: ordered,
+      }
     }
-    // score mode: keep numeric scores as entered (default 0)
-    return selected.map((id) => ({ ...players.find((p) => p.id === id), score: Number(scores[id] ?? 0) }))
+
+    return {
+      entryMode: 'scores',
+      players: ordered.map((player) => ({
+        ...player,
+        score: Number(scores[player.id]),
+      })),
+    }
   }
 
   function handlePreview() {
-    const sel = gatherSelected()
-    if (sel.length < 2) {
+    if (selected.length < 2) {
       alert('Select at least 2 players')
       return
     }
-    if (sel.some((s) => !Number.isFinite(s.score))) {
-      alert('Enter numeric scores for all selected players')
+    if (!rankingValidation.canConfirm) {
+      alert(rankingValidation.disabledReason || 'Battle result is not valid yet.')
       return
     }
+    const sel = gatherSelected()
     onPreview && onPreview(sel)
   }
 
   function handleConfirm() {
-    const sel = gatherSelected()
-    if (sel.length < 2) {
+    if (selected.length < 2) {
       alert('Select at least 2 players')
       return
     }
+    if (!rankingValidation.canConfirm) {
+      alert(rankingValidation.disabledReason || 'Battle result is not valid yet.')
+      return
+    }
+    const sel = gatherSelected()
     onConfirm && onConfirm(sel)
   }
 
@@ -443,7 +713,8 @@ export default function NewMatch({
     if (!registerConfirm) return
 
     const api = {
-      canConfirm: canConfirmBattle(selected, resultMode, scores),
+      canConfirm: canConfirmBattle(selected, resultMode, scores) && rankingValidation.canConfirm,
+      disabledReason: rankingValidation.disabledReason,
       preview: () => handlePreview(),
       confirm: () => handleConfirm(),
     }
@@ -452,7 +723,7 @@ export default function NewMatch({
       registerConfirm(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, scores, resultMode, finishOrder])
+  }, [selected, scores, resultMode, finishOrder, rankingValidation.canConfirm, rankingValidation.disabledReason])
 
   function reorderFinishOrder(fromIdx, toIdx) {
     setFinishOrder((order) => {
@@ -627,7 +898,7 @@ export default function NewMatch({
         )}
 
         {!isSearchExperimentActive && selectedPlayers.length > 0 && (
-          <div className="battle-mode-toggle" role="tablist" aria-label="Result mode">
+          <div className="battle-mode-toggle" role="tablist" aria-label="Result entry mode">
             <button
               type="button"
               role="tab"
@@ -635,7 +906,7 @@ export default function NewMatch({
               className={`battle-mode-button ${resultMode === 'finish' ? 'battle-mode-button--active' : ''}`}
               onClick={() => setResultMode('finish')}
             >
-              FINISH ORDER
+              {RESULT_MODE_LABELS.finish}
             </button>
             <button
               type="button"
@@ -644,8 +915,36 @@ export default function NewMatch({
               className={`battle-mode-button ${resultMode === 'score' ? 'battle-mode-button--active' : ''}`}
               onClick={() => setResultMode('score')}
             >
-              SCORE
+              {RESULT_MODE_LABELS.score}
             </button>
+          </div>
+        )}
+
+        {!isSearchExperimentActive && selectedPlayers.length > 0 && rankingValidation.warning && (
+          <div className="ranking-sync-warning" role="status" aria-live="polite">
+            <div className="ranking-sync-warning-head">
+              <span className="ranking-sync-warning-icon" aria-hidden="true">⚠</span>
+              <span className="ranking-sync-warning-title">{rankingValidation.warning.heading}</span>
+            </div>
+            <div className="ranking-sync-warning-body">{rankingValidation.warning.body}</div>
+            <div className="ranking-sync-warning-actions">
+              <button
+                type="button"
+                className="ranking-sync-warning-action"
+                onClick={() => setResultMode('score')}
+              >
+                EDIT SCORES →
+              </button>
+              {rankingValidation.warning.type === 'partial-score' && (
+                <button
+                  type="button"
+                  className="ranking-sync-warning-clear"
+                  onClick={clearSelectedScores}
+                >
+                  CLEAR SCORES
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -654,7 +953,7 @@ export default function NewMatch({
         )}
 
         {!isSearchExperimentActive && selectedPlayers.length > 0 && (
-          <div className="results-player-list" role="list" aria-label="Finish order players">
+          <div className="results-player-list" role="list" aria-label="Ranking players">
             {resultsPlayers.map((player, index) => {
               const isFinishMode = resultMode === 'finish'
               const scoreValue = getNumericScoreValue(scores, player.id)
@@ -705,7 +1004,7 @@ export default function NewMatch({
                   <div className={`battle-player-controls ${isFinishMode ? 'battle-player-controls--finish' : 'battle-player-controls--score'}`}>
                     {isFinishMode ? (
                       <>
-                        <div className="battle-finish-position">POS {index + 1}</div>
+                        <div className="battle-finish-position">RANK {index + 1}</div>
                         <div className="battle-order-actions">
                           <button
                             type="button"
@@ -739,7 +1038,7 @@ export default function NewMatch({
                     ) : (
                       <div className="score-control" onClick={(e) => e.stopPropagation()}>
                         <button className="score-btn" aria-label={`Decrease ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) - 1) }}>−</button>
-                        <div className="score-display">{(scores[player.id] === 0 || scores[player.id] === '0' || scores[player.id] == null) ? 'E' : (Number(scoreValue) > 0 ? `+${Number(scoreValue)}` : String(Number(scoreValue)))}</div>
+                        <div className={`score-display ${toFiniteScoreOrNull(scores[player.id]) == null ? 'score-display--blank' : ''}`}>{toFiniteScoreOrNull(scores[player.id]) == null ? '—' : String(Number(scoreValue))}</div>
                         <button className="score-btn" aria-label={`Increase ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) + 1) }}>+</button>
                       </div>
                     )}
@@ -760,7 +1059,7 @@ export default function NewMatch({
                     <div className="result-pos">{r.position}</div>
                     <div className="result-info">
                       <div className="result-name">{r.name}</div>
-                      <div className="result-meta">score {r.score}</div>
+                      <div className="result-meta">{r.score == null ? 'ranking entry' : `${r.score} throws`}</div>
                     </div>
                   </div>
                   <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>

@@ -14,6 +14,48 @@ import { mapOwnersToBattlePlayers } from './utils/liveOwnership'
 import { getPreviewRosterOwners, PREVIEW_DATA_SOURCE } from './data/previewRoster'
 import { DEFAULT_MAIN_VIEW, HISTORY_TABS, MAIN_VIEW_ORDER } from './utils/navigation'
 
+function buildResultFromRankingOrder(playersInRanking = []) {
+  if (!Array.isArray(playersInRanking) || playersInRanking.length === 0) {
+    return { rankedPlayers: [], exchanges: [], kept: [] }
+  }
+
+  const participatingTags = playersInRanking
+    .map((player) => Number(player.tag))
+    .filter((tag) => Number.isFinite(tag))
+    .sort((a, b) => a - b)
+
+  const rankedPlayers = playersInRanking.map((player, index) => {
+    const oldTag = Number(player.tag)
+    const newTag = participatingTags[index]
+    return {
+      id: player.id,
+      name: player.name,
+      score: null,
+      position: index + 1,
+      oldTag,
+      newTag,
+    }
+  })
+
+  const exchanges = []
+  rankedPlayers.forEach((rankedPlayer) => {
+    if (rankedPlayer.oldTag !== rankedPlayer.newTag) {
+      const originalOwner = playersInRanking.find((player) => Number(player.tag) === Number(rankedPlayer.newTag))
+      exchanges.push({ tag: rankedPlayer.newTag, from: originalOwner ? originalOwner.name : null, to: rankedPlayer.name })
+    }
+  })
+
+  const kept = rankedPlayers.filter((player) => player.oldTag === player.newTag).map((player) => player.id)
+  return { rankedPlayers, exchanges, kept }
+}
+
+function buildBattleResultFromEntry(entryPayload) {
+  if (entryPayload?.entryMode === 'ranking') {
+    return buildResultFromRankingOrder(entryPayload.players)
+  }
+  return redistributeTags(entryPayload?.players || [])
+}
+
 function App() {
   const [players, setPlayers] = useState([])
   const [owners, setOwners] = useState(new Map())
@@ -91,12 +133,12 @@ function App() {
           <div className={`battle-form-panel ${lastResult ? 'battle-form-panel--hidden' : ''}`}>
             <NewMatch
               players={players}
-              onPreview={(selectedWithScores) => {
-                const result = redistributeTags(selectedWithScores)
+              onPreview={(entryPayload) => {
+                const result = buildBattleResultFromEntry(entryPayload)
                 setLastResult(result)
               }}
-              onConfirm={(selectedWithScores) => {
-                const result = redistributeTags(selectedWithScores)
+              onConfirm={(entryPayload) => {
+                const result = buildBattleResultFromEntry(entryPayload)
                 handleApplyResult(result)
               }}
               previewResult={lastResult}
@@ -149,9 +191,29 @@ function App() {
 
       {view === 'battle' && !lastResult && (
         <div className="context-action">
+          {confirmApi && !confirmApi.canConfirm && confirmApi.disabledReason && (
+            <span
+              id="confirm-battle-disabled-reason"
+              style={{
+                position: 'absolute',
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: 'hidden',
+                clip: 'rect(0, 0, 0, 0)',
+                whiteSpace: 'nowrap',
+                border: 0,
+              }}
+            >
+              {confirmApi.disabledReason}
+            </span>
+          )}
           <button
             className="primary"
             disabled={!(confirmApi && confirmApi.canConfirm)}
+            aria-describedby={confirmApi && !confirmApi.canConfirm && confirmApi.disabledReason ? 'confirm-battle-disabled-reason' : undefined}
+            title={confirmApi && !confirmApi.canConfirm ? (confirmApi.disabledReason || 'Complete required battle inputs') : undefined}
             onClick={() => confirmApi && confirmApi.confirm && confirmApi.confirm()}
             style={{ width: '100%', maxWidth: 420 }}
           >
