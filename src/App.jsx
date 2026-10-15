@@ -50,6 +50,9 @@ function App() {
   function handleSelectMainView(nextView) {
     const normalized = MAIN_VIEW_ORDER.includes(nextView) ? nextView : DEFAULT_MAIN_VIEW
     setView(normalized)
+    if (normalized !== 'battle') {
+      setLastResult(null)
+    }
     if (normalized === 'history') {
       setHistoryTab('matches')
     }
@@ -64,11 +67,6 @@ function App() {
     setPlayers(updated)
     setLastResult(result)
     setView('battle')
-  }
-
-  function handleResultClose() {
-    setLastResult(null)
-    setView('bagtags')
   }
 
   const currentScreenTitle = view === 'battle' ? 'BATTLE' : view === 'history' ? 'HISTORY' : 'BAGTAG'
@@ -113,7 +111,7 @@ function App() {
             <div>
               <h2 className="section-title">RESULT</h2>
               <div className="section-sub">Finalized battle result</div>
-              <MatchResult result={lastResult} onClose={handleResultClose} />
+              <MatchResult result={lastResult} />
             </div>
           )}
         </div>

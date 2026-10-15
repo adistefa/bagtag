@@ -1,7 +1,7 @@
 import React from 'react'
 import TagBadge from './TagBadge'
 
-export default function MatchResult({ result, onClose }) {
+export default function MatchResult({ result }) {
   const { rankedPlayers = [], exchanges = [] } = result || {}
 
   return (
@@ -54,9 +54,6 @@ export default function MatchResult({ result, onClose }) {
         )}
       </div>
 
-      <div style={{marginTop:12}}>
-        <button className="primary" onClick={onClose}>BACK TO TAGS</button>
-      </div>
     </div>
   )
 }
