@@ -88,6 +88,31 @@ export function removeListItemById(list, id) {
   return list.filter((entry) => entry !== id)
 }
 
+export function syncFinishOrderWithSelected(order = [], selected = []) {
+  const kept = order.filter((id) => selected.includes(id))
+  const appended = selected.filter((id) => !kept.includes(id))
+  return [...kept, ...appended]
+}
+
+export function reorderFinishOrderByDrop(order = [], selected = [], draggedId, targetId, position = 'before') {
+  if (draggedId == null || targetId == null || draggedId === targetId) return order
+
+  const selectedSet = new Set(selected)
+  const orderedSelected = order.filter((id) => selectedSet.has(id))
+  if (!orderedSelected.includes(draggedId) || !orderedSelected.includes(targetId)) return order
+
+  const withoutDragged = orderedSelected.filter((id) => id !== draggedId)
+  const targetIdx = withoutDragged.indexOf(targetId)
+  if (targetIdx === -1) return order
+
+  const insertIdx = position === 'after' ? targetIdx + 1 : targetIdx
+  const nextOrderedSelected = [...withoutDragged]
+  nextOrderedSelected.splice(insertIdx, 0, draggedId)
+
+  const unselected = order.filter((id) => !selectedSet.has(id))
+  return [...nextOrderedSelected, ...unselected]
+}
+
 export function getNumericScoreValue(scoreMap = {}, id) {
   return Number(scoreMap[id] ?? 0)
 }
@@ -204,6 +229,7 @@ export default function NewMatch({
   const dropTargetRef = useRef(null)
   const dropPositionRef = useRef('before')
   const dragPointerRef = useRef({ active: false, pointerId: null, draggedId: null })
+  const dragHandleRef = useRef(null)
 
   // Local-only battle context (preview mode)
   const [locations, setLocations] = useState(['Hardhof', 'Sibbe', 'Hinterhausen'])
@@ -372,11 +398,7 @@ export default function NewMatch({
 
   // keep finishOrder in sync if selected array changes externally
   useEffect(() => {
-    setFinishOrder((order) => {
-      const kept = order.filter((id) => selected.includes(id))
-      const appended = selected.filter((id) => !kept.includes(id))
-      return [...kept, ...appended]
-    })
+    setFinishOrder((order) => syncFinishOrderWithSelected(order, selected))
   }, [selected])
 
   function setScore(id, v) {
@@ -446,29 +468,17 @@ export default function NewMatch({
   }
 
   function commitPointerDrop(draggedId, targetId, position) {
-    if (draggedId == null || targetId == null || draggedId === targetId) return
-
-    setFinishOrder((order) => {
-      const selectedSet = new Set(selectedRef.current)
-      const ordered = order.filter((id) => selectedSet.has(id))
-      if (!ordered.includes(draggedId) || !ordered.includes(targetId)) return order
-
-      const withoutDragged = ordered.filter((id) => id !== draggedId)
-      const targetIdx = withoutDragged.indexOf(targetId)
-      if (targetIdx === -1) return order
-
-      const insertIdx = position === 'after' ? targetIdx + 1 : targetIdx
-      const nextOrdered = [...withoutDragged]
-      nextOrdered.splice(insertIdx, 0, draggedId)
-
-      const unselected = order.filter((id) => !selectedSet.has(id))
-      return [...nextOrdered, ...unselected]
-    })
+    setFinishOrder((order) => reorderFinishOrderByDrop(order, selectedRef.current, draggedId, targetId, position))
   }
 
   function beginPointerDrag(e, draggedId) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     e.preventDefault()
+
+    if (typeof e.currentTarget?.setPointerCapture === 'function' && e.pointerId != null) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
+    dragHandleRef.current = e.currentTarget ?? null
 
     dragPointerRef.current = {
       active: true,
@@ -488,7 +498,7 @@ export default function NewMatch({
     if (!dragPointerRef.current.active) return
 
     const hit = document.elementFromPoint(clientX, clientY)
-    const row = hit?.closest?.('.finish-row')
+    const row = hit?.closest?.('.battle-player-row--finish')
 
     if (!row) {
       setDropTargetFinishId(null)
@@ -518,10 +528,19 @@ export default function NewMatch({
   function endPointerDrag() {
     if (!dragPointerRef.current.active) return
 
-    const { draggedId } = dragPointerRef.current
+    const { draggedId, pointerId } = dragPointerRef.current
     commitPointerDrop(draggedId, dropTargetRef.current, dropPositionRef.current)
 
+    if (dragHandleRef.current && pointerId != null && typeof dragHandleRef.current.releasePointerCapture === 'function') {
+      try {
+        dragHandleRef.current.releasePointerCapture(pointerId)
+      } catch {
+        // Ignore already-released pointer captures.
+      }
+    }
+
     dragPointerRef.current = { active: false, pointerId: null, draggedId: null }
+    dragHandleRef.current = null
     setDraggedFinishId(null)
     setDropTargetFinishId(null)
     setDropPosition('before')
@@ -562,6 +581,15 @@ export default function NewMatch({
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
+      const drag = dragPointerRef.current
+      if (dragHandleRef.current && drag.pointerId != null && typeof dragHandleRef.current.releasePointerCapture === 'function') {
+        try {
+          dragHandleRef.current.releasePointerCapture(drag.pointerId)
+        } catch {
+          // Ignore already-released pointer captures.
+        }
+      }
+      dragHandleRef.current = null
       document.body.classList.remove('is-dragging-finish')
     }
   }, [])
@@ -626,16 +654,29 @@ export default function NewMatch({
         )}
 
         {!isSearchExperimentActive && selectedPlayers.length > 0 && (
-          <div className="results-player-list">
+          <div className="results-player-list" role="list" aria-label="Finish order players">
             {resultsPlayers.map((player, index) => {
               const isFinishMode = resultMode === 'finish'
               const scoreValue = getNumericScoreValue(scores, player.id)
+              const isFirstPosition = index === 0
+              const isLastPosition = index === resultsPlayers.length - 1
+              const isDragActive = isFinishMode && draggedFinishId === player.id
+              const isDropTarget = isFinishMode && dropTargetFinishId === player.id
+              const rowClassName = [
+                'battle-player-row',
+                isFinishMode ? 'battle-player-row--finish' : 'battle-player-row--score',
+                isDragActive ? 'is-drag-active' : '',
+                isDropTarget && !isDragActive && dropPosition === 'before' ? 'drop-before' : '',
+                isDropTarget && !isDragActive && dropPosition === 'after' ? 'drop-after' : '',
+              ].filter(Boolean).join(' ')
 
               return (
                 <div
                   key={player.id}
-                  className={`battle-player-row ${isFinishMode ? 'battle-player-row--finish' : 'battle-player-row--score'}`}
+                  className={rowClassName}
                   data-player-key={String(player.id)}
+                  role="listitem"
+                  aria-label={`Position ${index + 1}, ${player.name}`}
                 >
                   <div className="battle-player-header">
                     <div className="battle-player-identity">
@@ -668,19 +709,30 @@ export default function NewMatch({
                         <div className="battle-order-actions">
                           <button
                             type="button"
-                            className="score-btn"
+                            className="score-btn finish-move-btn"
                             aria-label={`Move ${player.name} up`}
+                            disabled={isFirstPosition}
                             onClick={(e) => { e.stopPropagation(); moveFinish(player.id, -1) }}
                           >
                             ▲
                           </button>
                           <button
                             type="button"
-                            className="score-btn"
+                            className="score-btn finish-move-btn"
                             aria-label={`Move ${player.name} down`}
+                            disabled={isLastPosition}
                             onClick={(e) => { e.stopPropagation(); moveFinish(player.id, +1) }}
                           >
                             ▼
+                          </button>
+                          <button
+                            type="button"
+                            className={`drag-handle ${isDragActive ? 'drag-handle--active' : ''}`}
+                            aria-label={`Drag to reorder ${player.name}`}
+                            onPointerDown={(e) => beginPointerDrag(e, player.id)}
+                            onDragStart={(e) => e.preventDefault()}
+                          >
+                            <span className="drag-grip" aria-hidden="true">⋮⋮</span>
                           </button>
                         </div>
                       </>
