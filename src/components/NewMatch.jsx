@@ -174,6 +174,8 @@ export default function NewMatch({
   dataInconsistencies = [],
 }) {
   const searchInputRef = useRef(null)
+  const searchAreaRef = useRef(null)
+  const playerResultsRef = useRef(null)
   const [selected, setSelected] = useState([])
   const [scores, setScores] = useState({})
   const [resultMode, setResultMode] = useState('finish') // 'finish' | 'score'
@@ -210,6 +212,9 @@ export default function NewMatch({
   const [search, setSearch] = useState('')
   const [showAllPlayers, setShowAllPlayers] = useState(false)
   const [warningOpen, setWarningOpen] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchResultsMaxHeight, setSearchResultsMaxHeight] = useState(null)
+  const [isCompactViewport, setIsCompactViewport] = useState(false)
 
   const q = search.trim().toLowerCase()
   const selectedPlayers = players.filter((p) => selected.includes(p.id))
@@ -217,6 +222,10 @@ export default function NewMatch({
   const rosterMatches = getRosterMatches(players, selected, search, showAllPlayers)
   const availableRosterPlayers = getAvailableRosterPlayers(players, selected)
   const rosterIsExhausted = availableRosterPlayers.length === 0
+  const isSearchExperimentActive = (isCoarsePointer || isCompactViewport) && (searchFocused || q !== '')
+  const selectedSummaryText = selectedPlayers.length === 0
+    ? 'No players selected yet.'
+    : `${selectedPlayers.length} player${selectedPlayers.length === 1 ? '' : 's'} selected`
   const contextSummary = getContextSummaryParts({
     selectedLocation,
     selectedCourse,
@@ -245,20 +254,65 @@ export default function NewMatch({
   }, [])
 
   useEffect(() => {
+    if (!isSearchExperimentActive) {
+      setSearchResultsMaxHeight(null)
+      return
+    }
+
+    const updateSearchResultsHeight = () => {
+      if (!searchAreaRef.current) return
+
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      const searchRect = searchAreaRef.current.getBoundingClientRect()
+      const availableHeight = Math.floor(viewportHeight - searchRect.bottom - 24)
+      const safeHeight = Math.max(140, availableHeight)
+      setSearchResultsMaxHeight(safeHeight)
+    }
+
+    updateSearchResultsHeight()
+
+    const visualViewport = window.visualViewport
+    if (visualViewport) {
+      visualViewport.addEventListener('resize', updateSearchResultsHeight)
+      visualViewport.addEventListener('scroll', updateSearchResultsHeight)
+    }
+    window.addEventListener('resize', updateSearchResultsHeight)
+
+    return () => {
+      if (visualViewport) {
+        visualViewport.removeEventListener('resize', updateSearchResultsHeight)
+        visualViewport.removeEventListener('scroll', updateSearchResultsHeight)
+      }
+      window.removeEventListener('resize', updateSearchResultsHeight)
+    }
+  }, [isSearchExperimentActive, selectedPlayers.length, q, showAllPlayers])
+
+  useEffect(() => {
     finishOrderRef.current = finishOrder.filter((id) => selected.includes(id))
   }, [finishOrder, selected])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(pointer: coarse)')
+    const compactQuery = window.matchMedia('(max-width: 560px)')
     const update = () => {
       const coarseMatch = mediaQuery.matches
+      const compactMatch = compactQuery.matches
       const touchSupport = navigator.maxTouchPoints > 0 || 'ontouchstart' in window
       setIsCoarsePointer(coarseMatch || touchSupport)
+      setIsCompactViewport(compactMatch)
     }
 
     update()
     mediaQuery.addEventListener('change', update)
-    return () => mediaQuery.removeEventListener('change', update)
+    compactQuery.addEventListener('change', update)
+    window.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('resize', update)
+    return () => {
+      mediaQuery.removeEventListener('change', update)
+      compactQuery.removeEventListener('change', update)
+      window.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('resize', update)
+    }
   }, [])
 
   // When location changes, update courses and defaults
@@ -503,11 +557,22 @@ export default function NewMatch({
   const resultsPlayers = orderedSelectedPlayers.length > 0 ? orderedSelectedPlayers : selectedPlayers
 
   return (
-    <div className="new-battle-screen">
+    <div className={`new-battle-screen ${isSearchExperimentActive ? 'new-battle-screen--search-active' : ''}`}>
       <div className="battle-section battle-results-section">
         <div className="context-headline">RESULTS</div>
 
-        {selectedPlayers.length > 0 && (
+        {isSearchExperimentActive && (
+          <div className="battle-results-summary" aria-live="polite">
+            <div className="battle-results-summary-main">{selectedSummaryText}</div>
+            {selectedPlayers.length > 0 && (
+              <div className="battle-results-summary-sub">
+                {selectedPlayers.map((player) => player.name).join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isSearchExperimentActive && selectedPlayers.length > 0 && (
           <div className="battle-mode-toggle" role="tablist" aria-label="Result mode">
             <button
               type="button"
@@ -530,11 +595,11 @@ export default function NewMatch({
           </div>
         )}
 
-        {selectedPlayers.length < 2 && (
+        {!isSearchExperimentActive && selectedPlayers.length < 2 && (
           <div className="battle-empty-state">Add at least two players to enter results.</div>
         )}
 
-        {selectedPlayers.length > 0 && (
+        {!isSearchExperimentActive && selectedPlayers.length > 0 && (
           <div className="results-player-list">
             {resultsPlayers.map((player, index) => {
               const isFinishMode = resultMode === 'finish'
@@ -607,7 +672,7 @@ export default function NewMatch({
           </div>
         )}
 
-        {previewResult && (
+        {!isSearchExperimentActive && previewResult && (
           <div className="battle-preview-panel" style={{ marginTop: 16 }}>
             <h3 style={{ margin: '6px 0' }}>Preview</h3>
             <div style={{ borderTop: '1px solid var(--border)' }}>
@@ -648,7 +713,7 @@ export default function NewMatch({
       <div className="battle-section battle-player-section">
         <div className="context-headline">ADD PLAYERS</div>
 
-        <div className="search-area">
+        <div ref={searchAreaRef} className="search-area">
           <input
             ref={searchInputRef}
             id="battle-player-search"
@@ -656,6 +721,8 @@ export default function NewMatch({
             placeholder="Search players…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             aria-label="Search players"
             autoComplete="off"
           />
@@ -669,7 +736,7 @@ export default function NewMatch({
           )}
         </div>
 
-        {!playersLoading && !playersError && players.length > 0 && q === '' && (
+        {!isSearchExperimentActive && !playersLoading && !playersError && players.length > 0 && q === '' && (
           <button
             type="button"
             className="roster-toggle"
@@ -681,7 +748,11 @@ export default function NewMatch({
           </button>
         )}
 
-        <div className="player-results">
+        <div
+          ref={playerResultsRef}
+          className={`player-results ${isSearchExperimentActive ? 'player-results--search-active' : ''}`}
+          style={isSearchExperimentActive && searchResultsMaxHeight ? { maxHeight: `${searchResultsMaxHeight}px` } : undefined}
+        >
           {playersLoading && <div className="loader">Loading live players…</div>}
           {!playersLoading && playersError && <div className="error">Unable to load live players and tags.</div>}
           {!playersLoading && !playersError && players.length === 0 && (

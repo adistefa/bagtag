@@ -132,6 +132,9 @@ body{
 .battle-section{display:flex;flex-direction:column;gap:8px}
 .battle-results-section,.battle-player-section,.battle-context-section{display:flex;flex-direction:column;gap:8px}
 .battle-empty-state{padding:0 0 2px;color:var(--text-secondary);font-size:12px;line-height:1.4}
+.battle-results-summary{padding:10px 12px;border-radius:10px;border:1px solid rgba(246,246,241,0.12);background:rgba(8,26,19,0.44)}
+.battle-results-summary-main{font-size:13px;font-weight:800;line-height:1.3}
+.battle-results-summary-sub{margin-top:4px;font-size:11px;color:var(--text-secondary);line-height:1.35;max-height:34px;overflow:hidden;text-overflow:ellipsis}
 .battle-context-wrap{display:flex;flex-direction:column;gap:10px}
 .context-headline{font-weight:800;font-size:13px;letter-spacing:0.07em;text-transform:uppercase}
 
@@ -207,6 +210,7 @@ body{
 .battle-player-remove{width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--border-control);background:rgba(8,26,19,0.68);color:var(--text-primary);font-size:18px;line-height:1;cursor:pointer;flex-shrink:0}
 
 .player-results{border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(8,26,19,0.26)}
+.player-results--search-active{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .available-player-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid rgba(246,246,241,0.08);gap:10px;background:rgba(15,45,34,0.66);min-height:56px}
 .available-player-row:nth-child(even){background:rgba(28,63,46,0.52)}
 .available-player-row:last-child{border-bottom:none}
@@ -318,6 +322,32 @@ body{
 .history-subnav-item{flex:1;padding:10px 8px;border-radius:10px;border:1px solid rgba(246,246,241,0.08);background:rgba(15,45,34,0.8);color:var(--text-primary);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
 .history-subnav-item--active{background:var(--disc-lemon);color:var(--forest-deep);border-color:var(--disc-lemon)}
 .history-placeholder{padding:12px 0}
+
+@media (max-width: 560px) {
+  .new-battle-screen--search-active .battle-context-section {
+    display: none;
+  }
+
+  .new-battle-screen--search-active .battle-player-section {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    padding: 8px 0 0;
+    background: linear-gradient(180deg, rgba(8,26,19,0.96), rgba(8,26,19,0.88));
+  }
+
+  .new-battle-screen--search-active .battle-results-section {
+    gap: 6px;
+  }
+
+  .new-battle-screen--search-active .search-area {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    padding-bottom: 2px;
+    background: inherit;
+  }
+}
 
 /* Search input */
 .search-input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-control);background:transparent;color:var(--text-primary);box-sizing:border-box}
