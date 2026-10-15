@@ -58,6 +58,20 @@ function SelectedPlayerCard({ player, onRemove }) {
   )
 }
 
+function CompactSelectedPlayerTile({ player }) {
+  const discClass = getPlayerDiscColorClass(player)
+  const initials = getPlayerInitials(player)
+
+  return (
+    <div className="battle-results-grid-item">
+      <div className={`player-disc battle-results-grid-disc ${discClass}`} aria-hidden>
+        <span className="player-disc-initials">{initials}</span>
+      </div>
+      <div className="battle-results-grid-name">{player.name}</div>
+    </div>
+  )
+}
+
 export function moveListItemById(list, id, dir) {
   const idx = list.indexOf(id)
   if (idx === -1) return list
@@ -223,9 +237,8 @@ export default function NewMatch({
   const availableRosterPlayers = getAvailableRosterPlayers(players, selected)
   const rosterIsExhausted = availableRosterPlayers.length === 0
   const isSearchExperimentActive = (isCoarsePointer || isCompactViewport) && (searchFocused || q !== '')
-  const selectedSummaryText = selectedPlayers.length === 0
-    ? 'No players selected yet.'
-    : `${selectedPlayers.length} player${selectedPlayers.length === 1 ? '' : 's'} selected`
+  const selectedSummaryCountText = `${selectedPlayers.length} PLAYER${selectedPlayers.length === 1 ? '' : 'S'}`
+  const selectedSummaryHasOverflow = selectedPlayers.length > 4
   const contextSummary = getContextSummaryParts({
     selectedLocation,
     selectedCourse,
@@ -559,14 +572,27 @@ export default function NewMatch({
   return (
     <div className={`new-battle-screen ${isSearchExperimentActive ? 'new-battle-screen--search-active' : ''}`}>
       <div className="battle-section battle-results-section">
-        <div className="context-headline">RESULTS</div>
+        <div className="battle-results-headline-row">
+          <div className="context-headline">RESULTS</div>
+          {isSearchExperimentActive && (
+            <div className="battle-results-count" aria-live="polite">{selectedSummaryCountText}</div>
+          )}
+        </div>
 
         {isSearchExperimentActive && (
-          <div className="battle-results-summary" aria-live="polite">
-            <div className="battle-results-summary-main">{selectedSummaryText}</div>
-            {selectedPlayers.length > 0 && (
-              <div className="battle-results-summary-sub">
-                {selectedPlayers.map((player) => player.name).join(' · ')}
+          <div
+            className={`battle-results-summary ${selectedSummaryHasOverflow ? 'battle-results-summary--scroll' : ''}`}
+            aria-live="polite"
+          >
+            {selectedPlayers.length === 0 ? (
+              <div className="battle-results-summary-empty">No players selected yet.</div>
+            ) : (
+              <div className="battle-results-grid" role="list" aria-label="Selected players">
+                {selectedPlayers.map((player) => (
+                  <div key={player.id} role="listitem">
+                    <CompactSelectedPlayerTile player={player} />
+                  </div>
+                ))}
               </div>
             )}
           </div>
