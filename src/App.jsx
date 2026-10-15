@@ -71,7 +71,7 @@ function App() {
     setView('bagtags')
   }
 
-  const currentScreenTitle = view === 'battle' ? 'BATTLE' : 'BAGTAG'
+  const currentScreenTitle = view === 'battle' ? 'BATTLE' : view === 'history' ? 'HISTORY' : 'BAGTAG'
 
   return (
     <div className="app-shell">
@@ -119,21 +119,6 @@ function App() {
         </div>
 
         <div className={`view-panel ${view === 'history' ? 'is-visible' : 'is-hidden'}`}>
-          <div className="history-subnav" role="tablist" aria-label="History sections">
-            {HISTORY_TABS.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={historyTab === tab}
-                className={`history-subnav-item ${historyTab === tab ? 'history-subnav-item--active' : ''}`}
-                onClick={() => setHistoryTab(tab)}
-              >
-                {tab.toUpperCase()}
-              </button>
-            ))}
-          </div>
-
           {historyTab === 'matches' && <HistoricalBattleHistory />}
 
           {historyTab === 'players' && <PlayerTimeline />}
@@ -146,6 +131,23 @@ function App() {
           )}
         </div>
       </main>
+
+      {view === 'history' && (
+        <div className="history-subnav" role="tablist" aria-label="History sections">
+          {HISTORY_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={historyTab === tab}
+              className={`history-subnav-item ${historyTab === tab ? 'history-subnav-item--active' : ''}`}
+              onClick={() => setHistoryTab(tab)}
+            >
+              {tab.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
 
       {view === 'battle' && !lastResult && (
         <div className="context-action">

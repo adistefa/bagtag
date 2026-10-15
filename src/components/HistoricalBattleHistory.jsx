@@ -117,7 +117,6 @@ export default function HistoricalBattleHistory() {
   if (!battles.length) {
     return (
       <div className="history-view">
-        <h2 className="section-title">HISTORY</h2>
         <div className="section-sub">No historical archive matches available.</div>
       </div>
     )
@@ -125,10 +124,6 @@ export default function HistoricalBattleHistory() {
 
   return (
     <div className="history-view">
-      <div className="history-header-row">
-        <h2 className="section-title">HISTORY</h2>
-      </div>
-
       <div className="search-area history-search-area">
         <div className="search-row">
           <input
@@ -176,7 +171,7 @@ export default function HistoricalBattleHistory() {
                   return (
                     <div key={`${battle.source_match_key}-${participant.source_player_hash || playerName}-${index}`} className="history-participant-row">
                       <div className="history-position">{formatPosition(participant.finishing_rank ?? index + 1)}</div>
-                      <div className={`player-disc ${discClass}`} aria-hidden>{initials}</div>
+                      <div className={`player-disc ${discClass}`} aria-hidden><span className="player-disc-initials">{initials}</span></div>
                       <div className="history-player-meta">
                         <div className="history-player-name">{playerName}</div>
                       </div>

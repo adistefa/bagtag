@@ -314,9 +314,9 @@ body{
 .context-action{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom, 0px));display:flex;justify-content:center;padding:8px calc(env(safe-area-inset-left, 0px) + 16px) 10px calc(env(safe-area-inset-right, 0px) + 16px);z-index:45;width:100%;max-width:420px;box-sizing:border-box}
 .context-action .primary{width:calc(100% - 32px);max-width:420px;background:var(--accent);color:var(--text-on-accent)}
 
-.history-subnav{display:flex;gap:8px;padding:8px;border-radius:12px;background:rgba(15,45,34,0.72);border:1px solid rgba(246,246,241,0.08);margin-bottom:12px}
-.history-subnav-item{flex:1;padding:10px 8px;border-radius:10px;border:1px solid var(--border-control);background:transparent;color:var(--text-secondary);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
-.history-subnav-item--active{background:var(--accent);color:var(--text-on-accent);border-color:var(--accent)}
+.history-subnav{position:fixed;left:50%;bottom:calc(74px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);display:flex;gap:8px;padding:8px;border-radius:12px;background:rgba(15,45,34,0.72);border:1px solid rgba(246,246,241,0.08);backdrop-filter:blur(10px);width:100%;max-width:420px;box-sizing:border-box;z-index:45}
+.history-subnav-item{flex:1;padding:10px 8px;border-radius:10px;border:1px solid rgba(246,246,241,0.08);background:rgba(15,45,34,0.8);color:var(--text-primary);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
+.history-subnav-item--active{background:var(--disc-lemon);color:var(--forest-deep);border-color:var(--disc-lemon)}
 .history-placeholder{padding:12px 0}
 
 /* Search input */
@@ -338,7 +338,7 @@ body.is-dragging-finish{overflow:hidden;touch-action:none}
 
 .history-view{display:flex;flex-direction:column;gap:10px}
 .history-header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:2px}
-.history-search-area{padding:10px 12px}
+.history-search-area{position:sticky;top:0;z-index:12;padding:10px 12px;background:linear-gradient(180deg, rgba(8,26,19,0.96), rgba(8,26,19,0.88) 72%, rgba(8,26,19,0));border-radius:0 0 12px 12px;backdrop-filter:blur(8px)}
 .history-search-meta{font-size:12px;color:var(--text-secondary);padding:0 2px}
 .history-empty-state{padding:12px;border-radius:10px;background:rgba(8,26,19,0.34);border:1px solid rgba(246,246,241,0.08);color:var(--text-secondary);font-size:13px}
 .player-timeline{display:flex;flex-direction:column;gap:12px}
@@ -393,9 +393,10 @@ body.is-dragging-finish{overflow:hidden;touch-action:none}
 .history-location{margin-top:2px;font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .history-participant-list{display:flex;flex-direction:column;gap:4px;margin-top:6px}
 .history-participant-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-height:36px}
-.history-position{width:40px;min-width:40px;font-size:10px;font-weight:800;color:var(--text-secondary);letter-spacing:0.04em;text-transform:uppercase}
-.history-player-meta{display:flex;flex:1;min-width:0}
-.history-player-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-position,.player-disc,.history-player-meta,.history-tag-wrap{display:flex;align-items:center}
+.history-position{width:40px;min-width:40px;font-size:10px;font-weight:800;color:var(--text-secondary);letter-spacing:0.04em;text-transform:uppercase;justify-content:flex-start}
+.history-player-meta{flex:1;min-width:0;align-items:center}
+.history-player-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;display:block}
 .history-tag-wrap{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;min-width:88px}
 .history-tag-flow{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-height:24px}
 .history-tag-start{font-size:11px;color:var(--text-secondary);font-weight:700;letter-spacing:0.02em}
