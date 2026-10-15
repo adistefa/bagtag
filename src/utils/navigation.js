@@ -1,4 +1,4 @@
-export const DEFAULT_MAIN_VIEW = 'bagtags'
+export const DEFAULT_MAIN_VIEW = 'battle'
 
 export const MAIN_VIEW_ORDER = ['battle', 'history', 'bagtags']
 

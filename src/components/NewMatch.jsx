@@ -173,6 +173,7 @@ export default function NewMatch({
   playersError = null,
   dataInconsistencies = [],
 }) {
+  const searchInputRef = useRef(null)
   const [selected, setSelected] = useState([])
   const [scores, setScores] = useState({})
   const [resultMode, setResultMode] = useState('finish') // 'finish' | 'score'
@@ -230,6 +231,20 @@ export default function NewMatch({
   }, [selected])
 
   useEffect(() => {
+    if (!searchInputRef.current) return
+
+    const input = searchInputRef.current
+    const focusInput = () => {
+      if (typeof window === 'undefined') return
+      window.requestAnimationFrame(() => {
+        input.focus()
+      })
+    }
+
+    focusInput()
+  }, [])
+
+  useEffect(() => {
     finishOrderRef.current = finishOrder.filter((id) => selected.includes(id))
   }, [finishOrder, selected])
 
@@ -275,6 +290,12 @@ export default function NewMatch({
     })
     setSearch('')
     setShowAllPlayers(false)
+
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+      })
+    }
   }
 
   function removePlayer(id) {
@@ -629,12 +650,14 @@ export default function NewMatch({
 
         <div className="search-area">
           <input
+            ref={searchInputRef}
             id="battle-player-search"
             className="search-input battle-search-input"
             placeholder="Search players…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search players"
+            autoComplete="off"
           />
 
           {search.trim() !== '' && (
