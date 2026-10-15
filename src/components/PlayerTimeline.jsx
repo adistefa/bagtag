@@ -247,6 +247,36 @@ export function toggleHistoricalPlayerSelection(selectedPlayerIds, playerId, max
   }
 }
 
+export function getLatestSelectedTimelineEvent(selectedPlayerIds = [], archive = getHistoricalArchive()) {
+  const idList = Array.from(new Set((selectedPlayerIds || []).filter(Boolean)))
+  if (!idList.length) return null
+
+  const historicalPlayers = getHistoricalPlayerOptions(archive)
+  const playerLookup = new Map(historicalPlayers.map((player) => [player.id, player]))
+
+  const events = idList.flatMap((playerId) => {
+    const player = playerLookup.get(playerId)
+    return getPlayerTimelineEntries(playerId, archive).map((event) => ({
+      ...event,
+      playerId,
+      playerLabel: player?.label || 'Unknown player',
+      playerColorClass: getPlayerDiscColorClass({ id: playerId, name: player?.label || 'Unknown player' }),
+    }))
+  })
+
+  if (!events.length) return null
+
+  return [...events].sort((left, right) => {
+    const byDate = (right.dateMs || 0) - (left.dateMs || 0)
+    if (byDate !== 0) return byDate
+
+    const byMatch = String(right.matchKey || '').localeCompare(String(left.matchKey || ''))
+    if (byMatch !== 0) return byMatch
+
+    return String(right.playerId || '').localeCompare(String(left.playerId || ''))
+  })[0]
+}
+
 function formatDate(dateValue) {
   if (!dateValue) return 'Unknown date'
 
@@ -278,31 +308,49 @@ export default function PlayerTimeline() {
   const archive = useMemo(() => getHistoricalArchive(), [])
   const allPlayers = useMemo(() => getHistoricalPlayerOptions(archive), [archive])
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState(() => (allPlayers[0] ? [allPlayers[0].id] : []))
+  const [sheetSearchQuery, setSheetSearchQuery] = useState('')
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState([])
   const [selectedEventKey, setSelectedEventKey] = useState(null)
   const [selectedEventPlayerId, setSelectedEventPlayerId] = useState(null)
   const [selectionMessage, setSelectionMessage] = useState('')
   const [focusedPlayerId, setFocusedPlayerId] = useState(null)
   const [comparisonColors, setComparisonColors] = useState({})
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [activeSlotIndex, setActiveSlotIndex] = useState(null)
+  const previousFocusRef = useRef(null)
+  const sheetInputRef = useRef(null)
+  const sheetRef = useRef(null)
+  const scrollRef = useRef(null)
+  const touchStartYRef = useRef(0)
+  const previousSelectionRef = useRef('')
 
   useEffect(() => {
     if (!allPlayers.length) {
       setSelectedPlayerIds([])
       setSelectedEventKey(null)
       setSelectedEventPlayerId(null)
+      setFocusedPlayerId(null)
+      previousSelectionRef.current = ''
       return
     }
 
     setSelectedPlayerIds((current) => {
       const validIds = (current || []).filter((id) => allPlayers.some((player) => player.id === id))
-      if (validIds.length) return validIds
-      return [allPlayers[0].id]
+      return validIds
     })
   }, [allPlayers])
 
   const filteredPlayers = useMemo(
     () => searchHistoricalPlayers(allPlayers, searchQuery),
     [allPlayers, searchQuery]
+  )
+
+  const sheetPlayers = useMemo(
+    () => searchHistoricalPlayers(
+      allPlayers.filter((player) => !selectedPlayerIds.includes(player.id)),
+      sheetSearchQuery
+    ),
+    [allPlayers, selectedPlayerIds, sheetSearchQuery]
   )
 
   const selectedPlayers = useMemo(
@@ -322,7 +370,6 @@ export default function PlayerTimeline() {
 
   const chartLayout = useMemo(() => getTimelineChartLayout(timelineEvents, { todayMs: Date.now() }), [timelineEvents])
   const chartSeries = chartLayout.series || []
-  const scrollRef = useRef(null)
 
   useEffect(() => {
     setComparisonColors((current) => getComparisonChartColors(selectedPlayerIds, current))
@@ -333,19 +380,29 @@ export default function PlayerTimeline() {
   }, [selectedPlayerIds])
 
   useEffect(() => {
-    if (!timelineEvents.length) {
+    const selectionKey = selectedPlayerIds.join('|')
+    if (selectionKey === previousSelectionRef.current) return
+    previousSelectionRef.current = selectionKey
+
+    if (!selectedPlayerIds.length) {
       setSelectedEventKey(null)
       setSelectedEventPlayerId(null)
+      setFocusedPlayerId(null)
       return
     }
 
-    const currentMatch = timelineEvents.find((event) => event.matchKey === selectedEventKey && event.playerId === selectedEventPlayerId)
-    if (currentMatch) return
+    const latestEvent = getLatestSelectedTimelineEvent(selectedPlayerIds, archive)
+    if (!latestEvent) {
+      setSelectedEventKey(null)
+      setSelectedEventPlayerId(null)
+      setFocusedPlayerId(null)
+      return
+    }
 
-    const initial = timelineEvents[0]
-    setSelectedEventKey(initial.matchKey)
-    setSelectedEventPlayerId(initial.playerId)
-  }, [timelineEvents, selectedEventKey, selectedEventPlayerId])
+    setSelectedEventKey(latestEvent.matchKey)
+    setSelectedEventPlayerId(latestEvent.playerId)
+    setFocusedPlayerId(latestEvent.playerId)
+  }, [archive, selectedPlayerIds])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -353,8 +410,71 @@ export default function PlayerTimeline() {
     node.scrollLeft = Math.max(0, node.scrollWidth - node.clientWidth)
   }, [selectedPlayers.length, timelineEvents.length])
 
-  const activeEvent = timelineEvents.find((event) => event.matchKey === selectedEventKey && event.playerId === selectedEventPlayerId) || timelineEvents[0] || null
+  useEffect(() => {
+    if (!sheetOpen) return
+    const node = sheetInputRef.current
+    if (node) {
+      requestAnimationFrame(() => node.focus())
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [sheetOpen])
+
+  useEffect(() => {
+    if (!sheetOpen) return
+
+    const handleWindowKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeAddPlayerSheet()
+        return
+      }
+
+      if (event.key !== 'Tab' || !sheetRef.current) return
+
+      const focusables = Array.from(
+        sheetRef.current.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])')
+      ).filter((element) => !element.hasAttribute('disabled'))
+
+      if (!focusables.length) return
+
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleWindowKeyDown)
+    return () => window.removeEventListener('keydown', handleWindowKeyDown)
+  }, [sheetOpen])
+
+  const activeEvent = timelineEvents.find((event) => event.matchKey === selectedEventKey && event.playerId === selectedEventPlayerId) || null
   const continuityGap = hasContinuityGap(timelineEvents)
+
+  const openAddPlayerSheet = (slotIndex = null) => {
+    previousFocusRef.current = document.activeElement
+    setActiveSlotIndex(slotIndex)
+    setSheetSearchQuery('')
+    setSheetOpen(true)
+  }
+
+  const closeAddPlayerSheet = () => {
+    setSheetOpen(false)
+    setSheetSearchQuery('')
+    setActiveSlotIndex(null)
+    requestAnimationFrame(() => {
+      previousFocusRef.current?.focus?.()
+    })
+  }
 
   const handlePlayerToggle = (playerId) => {
     const next = toggleHistoricalPlayerSelection(selectedPlayerIds, playerId)
@@ -366,15 +486,6 @@ export default function PlayerTimeline() {
 
     setSelectionMessage('')
     setSelectedPlayerIds(next.ids)
-
-    if (!next.toggledOff) {
-      const nextPlayerEvents = getPlayerTimelineEntries(playerId, archive)
-      if (nextPlayerEvents.length) {
-        setSelectedEventKey(nextPlayerEvents[0].matchKey)
-        setSelectedEventPlayerId(playerId)
-        setFocusedPlayerId(playerId)
-      }
-    }
   }
 
   const handlePointSelect = (point) => {
@@ -394,52 +505,78 @@ export default function PlayerTimeline() {
     setFocusedPlayerId((current) => (current === playerId ? null : current))
   }
 
+  const slotItems = Array.from({ length: 3 }, (_, index) => {
+    const player = selectedPlayers[index]
+    if (!player) {
+      return {
+        key: `slot-empty-${index}`,
+        type: 'empty',
+        player: null,
+      }
+    }
+
+    return {
+      key: `slot-${player.id}`,
+      type: 'selected',
+      player,
+    }
+  })
+
   return (
     <div className="player-timeline">
       <div className="player-timeline-selection-wrap">
-        <div className="player-select-label">Selected players</div>
-        <div className="player-timeline-selection-chips" aria-live="polite">
-          {selectedPlayers.length ? (
-            selectedPlayers.map((player) => {
-              const chartColor = comparisonColors[player.id] || COMPARISON_COLOR_PALETTE[0]
-              const isFocused = focusedPlayerId === player.id
-              return (
-                <div key={player.id} className={`player-timeline-selection-chip ${isFocused ? 'player-timeline-selection-chip--focused' : ''}`} style={{ borderColor: isFocused ? chartColor : 'rgba(246,246,241,0.12)', boxShadow: isFocused ? `0 0 0 1px ${chartColor}` : 'none' }}>
-                  <button
-                    type="button"
-                    className="player-timeline-selection-label-btn"
-                    onClick={() => handleLegendFocusToggle(player.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        handleLegendFocusToggle(player.id)
-                      }
-                    }}
-                    aria-label={`Focus ${player.label}`}
-                    aria-pressed={isFocused}
-                  >
-                    <span className="player-timeline-color-swatch" style={{ background: chartColor }} aria-hidden="true" />
-                    <span className={`player-disc ${getPlayerDiscColorClass({ id: player.id, name: player.label })}`} aria-hidden="true">
-                      {player.label.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span>{player.label}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="player-timeline-selection-remove-btn"
-                    onClick={() => handleRemoveSelectedPlayer(player.id)}
-                    aria-label={`Remove ${player.label}`}
-                    title={`Remove ${player.label}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              )
-            })
-          ) : (
-            <span className="player-timeline-selection-empty">No players selected</span>
-          )}
+        <div className="player-timeline-selection-header">
+          <div className="player-select-label">Selected players</div>
+          <div className="player-timeline-selection-counter">{selectedPlayerIds.length} / 3</div>
         </div>
+
+        <div className="player-timeline-selection-slots" aria-live="polite">
+          {slotItems.map((slot, index) => {
+            if (slot.type === 'empty') {
+              return (
+                <button
+                  key={slot.key}
+                  type="button"
+                  className="player-timeline-selection-slot player-timeline-selection-slot--empty"
+                  onClick={() => openAddPlayerSheet(index)}
+                  aria-label="Add player"
+                >
+                  <span className="player-timeline-slot-plus" aria-hidden="true">＋</span>
+                  <span className="player-timeline-slot-label">ADD PLAYER</span>
+                </button>
+              )
+            }
+
+            const chartColor = comparisonColors[slot.player.id] || COMPARISON_COLOR_PALETTE[0]
+            const isFocused = focusedPlayerId === slot.player.id
+            const discClass = getPlayerDiscColorClass({ id: slot.player.id, name: slot.player.label })
+
+            return (
+              <div key={slot.key} className={`player-timeline-selection-slot player-timeline-selection-slot--selected ${isFocused ? 'is-focused' : ''}`} style={{ borderColor: isFocused ? chartColor : 'rgba(246,246,241,0.12)', boxShadow: isFocused ? `0 0 0 1px ${chartColor}` : 'none' }}>
+                <button
+                  type="button"
+                  className="player-timeline-selection-label-btn"
+                  onClick={() => handleLegendFocusToggle(slot.player.id)}
+                  aria-label={`Focus ${slot.player.label}`}
+                  aria-pressed={isFocused}
+                >
+                  <span className={`player-disc player-disc--compact ${discClass}`} aria-hidden="true">{slot.player.label.slice(0, 2).toUpperCase()}</span>
+                  <span className="player-timeline-selection-name">{slot.player.label}</span>
+                </button>
+                <button
+                  type="button"
+                  className="player-timeline-selection-remove-btn"
+                  onClick={() => handleRemoveSelectedPlayer(slot.player.id)}
+                  aria-label={`Remove ${slot.player.label}`}
+                  title={`Remove ${slot.player.label}`}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
         {selectionMessage && (
           <div className="player-timeline-max-message" role="status" aria-live="polite">
             {selectionMessage}
@@ -448,11 +585,10 @@ export default function PlayerTimeline() {
       </div>
 
       {!selectedPlayers.length ? (
-        <div className="player-timeline-empty-state">Select a player below to compare their historical timeline.</div>
+        <div className="player-timeline-empty-state">Select players to explore their history</div>
       ) : timelineEvents.length ? (
         <>
           <div className="player-timeline-chart-wrap">
-            <div className="player-timeline-chart-note">Observed events only • no synthetic current ownership</div>
             <div className="player-timeline-chart-area">
               <div className="player-timeline-y-axis" aria-hidden="true">
                 {chartLayout.referenceLines.map((line) => (
@@ -462,8 +598,8 @@ export default function PlayerTimeline() {
                 ))}
               </div>
 
-              <div className="player-timeline-scroll" ref={scrollRef} aria-label="Player timeline chart">
-                <svg viewBox={`0 0 ${chartLayout.width} ${chartLayout.height}`} className="player-timeline-svg" role="img" aria-label={`${selectedPlayers.map((player) => player.label).join(', ') || 'Player'} timeline`}>
+              <div className="player-timeline-scroll" ref={scrollRef} aria-label="Player history chart">
+                <svg viewBox={`0 0 ${chartLayout.width} ${chartLayout.height}`} className="player-timeline-svg" role="img" aria-label={`${selectedPlayers.map((player) => player.label).join(', ') || 'Player'} history`}>
                   <g>
                     {chartLayout.referenceLines.map((line) => (
                       <line
@@ -527,9 +663,6 @@ export default function PlayerTimeline() {
                     })}
 
                     <line x1={chartLayout.todayX} x2={chartLayout.todayX} y1={chartLayout.top} y2={chartLayout.height - chartLayout.axisHeight - 6} stroke="rgba(233, 244, 91, 0.8)" strokeWidth="1.5" strokeDasharray="3 4" />
-                    <text x={chartLayout.todayX + 6} y={chartLayout.height - chartLayout.axisHeight + 12} fill="var(--text-secondary)" fontSize="10" fontWeight="700">
-                      TODAY
-                    </text>
 
                     {chartLayout.calendarLabels.map((label) => {
                       const isYear = label.type === 'year'
@@ -557,10 +690,6 @@ export default function PlayerTimeline() {
               </div>
             </div>
           )}
-
-          {continuityGap && (
-            <div className="player-timeline-gap-note">Historical continuity gap: documented events are separated by missing archive intervals and are not treated as ownership continuity.</div>
-          )}
         </>
       ) : (
         <div className="player-timeline-empty-state">This player has no documented historical match events in the archive.</div>
@@ -584,11 +713,11 @@ export default function PlayerTimeline() {
         </div>
       </div>
 
-      {!filteredPlayers.length ? (
-        <div className="history-empty-state">No historical players match this search.</div>
-      ) : (
-        <div className="player-select-wrap">
-          <div className="player-select-label">Historical players</div>
+      <div className="player-select-wrap">
+        <div className="player-select-label">EXPLORE PLAYERS</div>
+        {!filteredPlayers.length ? (
+          <div className="history-empty-state">No historical players match this search.</div>
+        ) : (
           <div className="player-timeline-player-list" role="listbox" aria-label="Historical players">
             {filteredPlayers.map((player) => {
               const isSelected = selectedPlayerIds.includes(player.id)
@@ -606,6 +735,72 @@ export default function PlayerTimeline() {
                 </button>
               )
             })}
+          </div>
+        )}
+      </div>
+
+      {sheetOpen && (
+        <div className="player-add-sheet-backdrop" onClick={closeAddPlayerSheet} aria-hidden="true">
+          <div
+            className="player-add-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add player"
+            ref={sheetRef}
+            onClick={(event) => event.stopPropagation()}
+            onTouchStart={(event) => { touchStartYRef.current = event.touches[0]?.clientY ?? 0 }}
+            onTouchEnd={(event) => {
+              const swipeDistance = (event.changedTouches[0]?.clientY ?? 0) - touchStartYRef.current
+              if (swipeDistance > 80) {
+                closeAddPlayerSheet()
+              }
+            }}
+          >
+            <div className="player-add-sheet-header">
+              <div className="player-add-sheet-title">ADD PLAYER</div>
+              <button type="button" className="player-add-sheet-close" onClick={closeAddPlayerSheet} aria-label="Close add player sheet">
+                ×
+              </button>
+            </div>
+
+            <div className="player-add-sheet-search-wrap">
+              <input
+                ref={sheetInputRef}
+                aria-label="Search historical players"
+                className="search-input battle-search-input"
+                type="search"
+                value={sheetSearchQuery}
+                placeholder="Search historical players"
+                onChange={(event) => setSheetSearchQuery(event.target.value)}
+              />
+            </div>
+
+            <div className="player-add-sheet-list" role="listbox" aria-label="Available historical players">
+              {sheetPlayers.length ? (
+                sheetPlayers.map((player) => (
+                  <button
+                    key={player.id}
+                    type="button"
+                    className="player-add-sheet-row"
+                    onClick={() => {
+                      handlePlayerToggle(player.id)
+                      closeAddPlayerSheet()
+                    }}
+                    role="option"
+                    aria-label={`Add ${player.label}`}
+                  >
+                    <span className={`player-disc player-disc--compact ${getPlayerDiscColorClass({ id: player.id, name: player.label })}`} aria-hidden="true">{player.label.slice(0, 2).toUpperCase()}</span>
+                    <span className="player-add-sheet-player-meta">
+                      <span className="player-add-sheet-name">{player.label}</span>
+                      <span className="player-add-sheet-stats">{player.matchCount} documented matches</span>
+                    </span>
+                    <span className="player-add-sheet-plus" aria-hidden="true">＋</span>
+                  </button>
+                ))
+              ) : (
+                <div className="history-empty-state">No historical players match this search.</div>
+              )}
+            </div>
           </div>
         </div>
       )}

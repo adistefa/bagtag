@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { getComparisonChartColors, getPointTagLabel, getTimelineChartLayout, toggleHistoricalPlayerSelection, togglePlayerFocus } from '../components/PlayerTimeline'
+import {
+  getComparisonChartColors,
+  getLatestSelectedTimelineEvent,
+  getPointTagLabel,
+  getTimelineChartLayout,
+  toggleHistoricalPlayerSelection,
+  togglePlayerFocus,
+} from '../components/PlayerTimeline'
 import { getPlayerDiscColorClass } from './playerIdentityVisuals'
 import { getHistoricalPlayerOptions, getPlayerTimelineEntries, hasContinuityGap, getPlayerTimelineIdentityKey, searchHistoricalPlayers } from './playerTimeline'
 
@@ -217,6 +224,16 @@ describe('player timeline model', () => {
     expect(tooMany.ids).toEqual(['player-a', 'player-b', 'player-c'])
     expect(toggleOff.ids).toEqual(['player-a'])
     expect(toggleOff.toggledOff).toBe(true)
+  })
+
+  it('starts with no selected players and defaults the selected match to the latest documented event among them', () => {
+    const empty = getLatestSelectedTimelineEvent([], archive)
+    const latest = getLatestSelectedTimelineEvent(['name:alice steiner'], archive)
+
+    expect(empty).toBeNull()
+    expect(latest).not.toBeNull()
+    expect(latest.matchKey).toBe('hardhof:match-d')
+    expect(latest.playerId).toBe('name:alice steiner')
   })
 
   it('assigns distinct deterministic comparison colors across the selected set', () => {
