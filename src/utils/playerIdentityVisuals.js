@@ -1,4 +1,11 @@
-const DISC_COLORS = ['disc-white', 'disc-lemon', 'disc-pink', 'disc-sky', 'disc-mint']
+export const DISC_COLORS = ['disc-white', 'disc-orange', 'disc-pink', 'disc-sky', 'disc-mint']
+export const DISC_COLOR_VALUES = {
+  'disc-white': '#F6F6F1',
+  'disc-orange': '#FF9F2E',
+  'disc-pink': '#FF5BA7',
+  'disc-sky': '#78CFFF',
+  'disc-mint': '#81E4C2',
+}
 
 export function getPlayerDisplayName(player) {
   const fromName = typeof player?.name === 'string' ? player.name.trim() : ''

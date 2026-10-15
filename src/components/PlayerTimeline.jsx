@@ -1,19 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getHistoricalArchive } from '../data/historicalArchive'
 import { getHistoricalPlayerOptions, getPlayerTimelineEntries, searchHistoricalPlayers, hasContinuityGap } from '../utils/playerTimeline'
-import { getPlayerDiscColorClass } from '../utils/playerIdentityVisuals'
+import { DISC_COLOR_VALUES, getPlayerDiscColorClass } from '../utils/playerIdentityVisuals'
 
-const DISC_COLORS = {
-  'disc-white': '#F6F6F1',
-  'disc-lemon': '#E9F45B',
-  'disc-pink': '#FF5BA7',
-  'disc-sky': '#78CFFF',
-  'disc-mint': '#81E4C2',
-}
+const DISC_COLORS = DISC_COLOR_VALUES
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
 const REFERENCE_TAGS = [10, 20, 40]
-const COMPARISON_COLOR_PALETTE = ['#78CFFF', '#FF5BA7', '#E9F45B']
+const COMPARISON_COLOR_PALETTE = ['#78CFFF', '#FF5BA7', '#FF9F2E']
 
 export function getComparisonChartColors(selectedPlayerIds, previousColors = {}) {
   const uniqueIds = Array.from(new Set((selectedPlayerIds || []).filter(Boolean)))

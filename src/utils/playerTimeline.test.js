@@ -228,7 +228,7 @@ describe('player timeline model', () => {
     expect(new Set(Object.values(colorsA)).size).toBe(3)
     expect(colorsA['player-a']).toBe('#78CFFF')
     expect(colorsA['player-b']).toBe('#FF5BA7')
-    expect(colorsA['player-c']).toBe('#E9F45B')
+    expect(colorsA['player-c']).toBe('#FF9F2E')
   })
 
   it('toggles player focus without changing selection membership', () => {
