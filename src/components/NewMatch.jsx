@@ -539,17 +539,18 @@ export default function NewMatch({
   }, [selected])
 
   useEffect(() => {
-    if (!searchInputRef.current) return
+    if (!searchInputRef.current || typeof window === 'undefined') return
 
     const input = searchInputRef.current
-    const focusInput = () => {
-      if (typeof window === 'undefined') return
-      window.requestAnimationFrame(() => {
-        input.focus()
-      })
-    }
+    const pointerFine = window.matchMedia('(pointer: fine)').matches
+    const compactViewport = window.matchMedia('(max-width: 560px)').matches
+    const shouldAutoFocus = pointerFine && !compactViewport
 
-    focusInput()
+    if (!shouldAutoFocus) return
+
+    window.requestAnimationFrame(() => {
+      input.focus()
+    })
   }, [])
 
   useEffect(() => {
@@ -904,10 +905,67 @@ export default function NewMatch({
   return (
     <div className={`new-battle-screen ${isSearchExperimentActive ? 'new-battle-screen--search-active' : ''}`}>
       <div className="battle-section battle-results-section">
-        <div className="battle-results-headline-row">
-          <div className="context-headline">RESULTS</div>
-          {isSearchExperimentActive && (
-            <div className="battle-results-count" aria-live="polite">{selectedSummaryCountText}</div>
+        <div className={`battle-results-header-shell ${isSearchExperimentActive ? 'battle-results-header-shell--search-active' : ''}`}>
+          <div className="battle-results-headline-row">
+            <div className="context-headline">RESULTS</div>
+            {isSearchExperimentActive && (
+              <div className="battle-results-count" aria-live="polite">{selectedSummaryCountText}</div>
+            )}
+          </div>
+
+          {selectedPlayers.length > 0 && (
+            <div className="battle-mode-toggle" role="tablist" aria-label="Result entry mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={resultMode === 'finish'}
+                className={`battle-mode-button ${resultMode === 'finish' ? 'battle-mode-button--active' : ''}`}
+                onClick={() => setResultMode('finish')}
+              >
+                {RESULT_MODE_LABELS.finish}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={resultMode === 'score'}
+                className={`battle-mode-button ${resultMode === 'score' ? 'battle-mode-button--active' : ''}`}
+                onClick={() => setResultMode('score')}
+              >
+                {RESULT_MODE_LABELS.score}
+              </button>
+            </div>
+          )}
+
+          {selectedPlayers.length > 0 && rankingValidation.warning && (
+            <div className="ranking-sync-warning" role="status" aria-live="polite">
+              <div className="ranking-sync-warning-head">
+                <span className="ranking-sync-warning-icon" aria-hidden="true">⚠</span>
+                <span className="ranking-sync-warning-title">{rankingValidation.warning.heading}</span>
+              </div>
+              <div className="ranking-sync-warning-body">{rankingValidation.warning.body}</div>
+              <div className="ranking-sync-warning-actions">
+                <button
+                  type="button"
+                  className="ranking-sync-warning-action"
+                  onClick={() => setResultMode('score')}
+                >
+                  EDIT SCORES →
+                </button>
+                {rankingValidation.warning.type === 'partial-score' && (
+                  <button
+                    type="button"
+                    className="ranking-sync-warning-clear"
+                    onClick={clearSelectedScores}
+                  >
+                    CLEAR SCORES
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {selectedPlayers.length < 2 && (
+            <div className="battle-empty-state">Add at least two players to enter results.</div>
           )}
         </div>
 
@@ -928,61 +986,6 @@ export default function NewMatch({
               </div>
             )}
           </div>
-        )}
-
-        {!isSearchExperimentActive && selectedPlayers.length > 0 && (
-          <div className="battle-mode-toggle" role="tablist" aria-label="Result entry mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={resultMode === 'finish'}
-              className={`battle-mode-button ${resultMode === 'finish' ? 'battle-mode-button--active' : ''}`}
-              onClick={() => setResultMode('finish')}
-            >
-              {RESULT_MODE_LABELS.finish}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={resultMode === 'score'}
-              className={`battle-mode-button ${resultMode === 'score' ? 'battle-mode-button--active' : ''}`}
-              onClick={() => setResultMode('score')}
-            >
-              {RESULT_MODE_LABELS.score}
-            </button>
-          </div>
-        )}
-
-        {!isSearchExperimentActive && selectedPlayers.length > 0 && rankingValidation.warning && (
-          <div className="ranking-sync-warning" role="status" aria-live="polite">
-            <div className="ranking-sync-warning-head">
-              <span className="ranking-sync-warning-icon" aria-hidden="true">⚠</span>
-              <span className="ranking-sync-warning-title">{rankingValidation.warning.heading}</span>
-            </div>
-            <div className="ranking-sync-warning-body">{rankingValidation.warning.body}</div>
-            <div className="ranking-sync-warning-actions">
-              <button
-                type="button"
-                className="ranking-sync-warning-action"
-                onClick={() => setResultMode('score')}
-              >
-                EDIT SCORES →
-              </button>
-              {rankingValidation.warning.type === 'partial-score' && (
-                <button
-                  type="button"
-                  className="ranking-sync-warning-clear"
-                  onClick={clearSelectedScores}
-                >
-                  CLEAR SCORES
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {!isSearchExperimentActive && selectedPlayers.length < 2 && (
-          <div className="battle-empty-state">Add at least two players to enter results.</div>
         )}
 
         {!isSearchExperimentActive && selectedPlayers.length > 0 && (
@@ -1147,7 +1150,7 @@ export default function NewMatch({
           )}
         </div>
 
-        {!isSearchExperimentActive && !playersLoading && !playersError && players.length > 0 && q === '' && (
+        {!playersLoading && !playersError && players.length > 0 && q === '' && (
           <button
             type="button"
             className="roster-toggle"
