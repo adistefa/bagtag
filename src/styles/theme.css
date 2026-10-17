@@ -87,7 +87,8 @@ body{
 .view-panel.is-visible{display:block}
 .view-panel--battle.is-visible{display:flex;flex-direction:column;min-height:0}
 .view-panel--battle.is-visible .battle-form-panel{display:flex;flex-direction:column;flex:1;min-height:0}
-.battle-form-panel--hidden{display:none}
+.view-panel--battle.is-visible .battle-result-panel{display:flex;flex-direction:column;flex:1;min-height:0}
+.battle-result-scroll-region{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(170px + env(safe-area-inset-bottom, 0px))}
 
 /* Headings */
 .section-title{font-size:18px;font-weight:700;margin:12px 0 6px}

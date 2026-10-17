@@ -131,30 +131,32 @@ function App() {
         </div>
 
         <div className={`view-panel view-panel--battle ${view === 'battle' ? 'is-visible' : 'is-hidden'}`}>
-          <div className={`battle-form-panel ${lastResult ? 'battle-form-panel--hidden' : ''}`}>
-            <NewMatch
-              players={players}
-              onPreview={(entryPayload) => {
-                const result = buildBattleResultFromEntry(entryPayload)
-                setLastResult(result)
-              }}
-              onConfirm={(entryPayload) => {
-                const result = buildBattleResultFromEntry(entryPayload)
-                handleApplyResult(result)
-              }}
-              previewResult={lastResult}
-              registerConfirm={setConfirmApi}
-              playersLoading={playersLoading}
-              playersError={playersError}
-              dataInconsistencies={dataInconsistencies}
-            />
-          </div>
-
-          {lastResult && (
-            <div>
-              <h2 className="section-title">RESULT</h2>
-              <div className="section-sub">Finalized battle result</div>
-              <MatchResult result={lastResult} />
+          {!lastResult ? (
+            <div className="battle-form-panel">
+              <NewMatch
+                players={players}
+                onPreview={(entryPayload) => {
+                  const result = buildBattleResultFromEntry(entryPayload)
+                  setLastResult(result)
+                }}
+                onConfirm={(entryPayload) => {
+                  const result = buildBattleResultFromEntry(entryPayload)
+                  handleApplyResult(result)
+                }}
+                previewResult={lastResult}
+                registerConfirm={setConfirmApi}
+                playersLoading={playersLoading}
+                playersError={playersError}
+                dataInconsistencies={dataInconsistencies}
+              />
+            </div>
+          ) : (
+            <div className="battle-result-panel" aria-label="Battle result screen">
+              <div className="battle-result-scroll-region">
+                <h2 className="section-title">RESULT</h2>
+                <div className="section-sub">Finalized battle result</div>
+                <MatchResult result={lastResult} />
+              </div>
             </div>
           )}
         </div>
