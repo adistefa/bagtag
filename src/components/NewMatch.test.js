@@ -135,28 +135,28 @@ describe('finish-order interaction helpers', () => {
     expect(derived.status).toBe('incomplete')
   })
 
-  it('displays explicit zero score as E', () => {
+  it('displays explicit zero score as Even', () => {
     const formatted = formatBattleScoreDisplay(0)
-    expect(formatted.text).toBe('E')
+    expect(formatted.text).toBe('Even')
     expect(formatted.ariaLabel).toBe('Even')
     expect(formatted.isBlank).toBe(false)
   })
 
-  it('keeps blank score display separate from E', () => {
+  it('keeps blank score display separate from Even', () => {
     const formatted = formatBattleScoreDisplay('')
     expect(formatted.text).toBe('—')
     expect(formatted.isBlank).toBe(true)
   })
 
   it('displays negative and positive scores with expected signs', () => {
-    expect(formatBattleScoreDisplay(-3).text).toBe('-3')
+    expect(formatBattleScoreDisplay(-3).text).toBe('−3')
     expect(formatBattleScoreDisplay(3).text).toBe('+3')
   })
 
   it('does not alter underlying numeric value when formatting score', () => {
     const score = 0
     const formatted = formatBattleScoreDisplay(score)
-    expect(formatted.text).toBe('E')
+    expect(formatted.text).toBe('Even')
     expect(score).toBe(0)
   })
 

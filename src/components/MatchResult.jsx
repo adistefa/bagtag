@@ -1,5 +1,6 @@
 import React from 'react'
 import TagBadge from './TagBadge'
+import { formatBattleScoreDisplay } from '../utils/scoreDisplay'
 
 export default function MatchResult({ result }) {
   const { rankedPlayers = [], exchanges = [] } = result || {}
@@ -10,33 +11,37 @@ export default function MatchResult({ result }) {
         <div className="player-sub">Preview only · This result was not saved.</div>
       </div>
       <div style={{borderTop:'1px solid var(--border)',borderBottom:'1px solid var(--border)'}}>
-        {rankedPlayers.map(r => (
-          <div key={r.id} className="result-player">
-            <div className="result-left">
-              <div className="result-pos">{r.position}</div>
-              <div className="result-info">
-                <div className="result-name">{r.name}</div>
-                <div className="result-meta">{r.score == null ? 'ranking entry' : `${r.score} throws`}</div>
+        {rankedPlayers.map(r => {
+          const scoreDisplay = formatBattleScoreDisplay(r.score, { blankText: null, blankAriaLabel: null })
+
+          return (
+            <div key={r.id} className="result-player">
+              <div className="result-left">
+                <div className="result-pos">{r.position}</div>
+                <div className="result-info">
+                  <div className="result-name">{r.name}</div>
+                  {!scoreDisplay.isBlank && <div className="result-meta">{scoreDisplay.text}</div>}
+                </div>
+              </div>
+              <div className="tag-change">
+                {r.oldTag === r.newTag ? (
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:8}}>
+                    <TagBadge number={r.oldTag} variant={'inactive'} />
+                    <div className="defended">DEFENDED #{String(r.oldTag)}</div>
+                  </div>
+                ) : (
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:8}}>
+                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                      <TagBadge number={r.oldTag} variant={'inactive'} />
+                      <div>→</div>
+                      <TagBadge number={r.newTag} variant={'active'} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="tag-change">
-              {r.oldTag === r.newTag ? (
-                <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:8}}>
-                  <TagBadge number={r.oldTag} variant={'inactive'} />
-                  <div className="defended">DEFENDED #{String(r.oldTag)}</div>
-                </div>
-              ) : (
-                <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:8}}>
-                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                    <TagBadge number={r.oldTag} variant={'inactive'} />
-                    <div>→</div>
-                    <TagBadge number={r.newTag} variant={'active'} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="exchanges">

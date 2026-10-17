@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import TagBadge from './TagBadge'
 import { getPlayerDiscColorClass, getPlayerInitials } from '../utils/playerIdentityVisuals'
+import { formatBattleScoreDisplay } from '../utils/scoreDisplay'
+
+export { formatBattleScoreDisplay }
 
 function AvailablePlayerRow({ player, onAdd }) {
   const discClass = getPlayerDiscColorClass(player)
@@ -134,39 +137,6 @@ function toFiniteScoreOrNull(value) {
   if (isBlankScoreValue(value)) return null
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : null
-}
-
-export function formatBattleScoreDisplay(value) {
-  const numeric = toFiniteScoreOrNull(value)
-  if (numeric == null) {
-    return {
-      text: '—',
-      ariaLabel: 'No score entered',
-      isBlank: true,
-    }
-  }
-
-  if (numeric === 0) {
-    return {
-      text: 'E',
-      ariaLabel: 'Even',
-      isBlank: false,
-    }
-  }
-
-  if (numeric > 0) {
-    return {
-      text: `+${numeric}`,
-      ariaLabel: `Plus ${numeric}`,
-      isBlank: false,
-    }
-  }
-
-  return {
-    text: String(numeric),
-    ariaLabel: String(numeric),
-    isBlank: false,
-  }
 }
 
 function hasKnownStartingTag(player) {
@@ -1093,18 +1063,22 @@ export default function NewMatch({
             <div className="battle-preview-panel" style={{ marginTop: 16 }}>
               <h3 style={{ margin: '6px 0' }}>Preview</h3>
               <div style={{ borderTop: '1px solid var(--border)' }}>
-                {previewResult.rankedPlayers.map((r) => (
-                  <div key={r.id} className="result-player">
-                    <div className="result-left">
-                      <div className="result-pos">{r.position}</div>
-                      <div className="result-info">
-                        <div className="result-name">{r.name}</div>
-                        <div className="result-meta">{r.score == null ? 'ranking entry' : `${r.score} throws`}</div>
+                {previewResult.rankedPlayers.map((r) => {
+                  const scoreDisplay = formatBattleScoreDisplay(r.score, { blankText: null, blankAriaLabel: null })
+
+                  return (
+                    <div key={r.id} className="result-player">
+                      <div className="result-left">
+                        <div className="result-pos">{r.position}</div>
+                        <div className="result-info">
+                          <div className="result-name">{r.name}</div>
+                          {!scoreDisplay.isBlank && <div className="result-meta">{scoreDisplay.text}</div>}
+                        </div>
                       </div>
+                      <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>
                     </div>
-                    <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               <div className="exchanges">
