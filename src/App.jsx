@@ -66,6 +66,7 @@ function App() {
   const [historyTab, setHistoryTab] = useState('matches')
   const [lastResult, setLastResult] = useState(null)
   const [confirmApi, setConfirmApi] = useState(null)
+  const isBattleView = view === 'battle'
 
   useEffect(() => {
     setPlayersLoading(true)
@@ -122,14 +123,14 @@ function App() {
 
       <AnnouncementTicker />
 
-      <main>
+      <main className={isBattleView ? 'app-main app-main--battle' : 'app-main'}>
         <div className={`view-panel ${view === 'bagtags' ? 'is-visible' : 'is-hidden'}`}>
           <div className="tags-list" title={PREVIEW_DATA_SOURCE}>
             <Leaderboard owners={owners} loading={playersLoading} error={playersError} />
           </div>
         </div>
 
-        <div className={`view-panel ${view === 'battle' ? 'is-visible' : 'is-hidden'}`}>
+        <div className={`view-panel view-panel--battle ${view === 'battle' ? 'is-visible' : 'is-hidden'}`}>
           <div className={`battle-form-panel ${lastResult ? 'battle-form-panel--hidden' : ''}`}>
             <NewMatch
               players={players}

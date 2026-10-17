@@ -46,6 +46,21 @@ export function mapOwnersToBattlePlayers(owners = new Map()) {
 
   sorted.forEach(([tag, owner]) => {
     if (owner?.id == null) {
+      if (owner?.status === 'unknown') {
+        return
+      }
+
+      if (owner?.status === 'conflict') {
+        const conflictNames = Array.isArray(owner?.conflictNames)
+          ? owner.conflictNames.filter((name) => typeof name === 'string' && name.trim() !== '').join(' / ')
+          : ''
+        inconsistencies.push(conflictNames
+          ? `Tag #${tag} has conflicting owners: ${conflictNames}`
+          : `Tag #${tag} has conflicting owners`
+        )
+        return
+      }
+
       inconsistencies.push(`Skipping tag #${tag}: missing player_id`)
       return
     }

@@ -165,8 +165,8 @@ export default function HistoricalBattleHistory() {
               <div className="history-participant-list">
                 {battle.participants.map((participant, index) => {
                   const playerName = participant.source_player_name || participant.normalized_player_name || 'Unknown player'
-                  const discClass = getPlayerDiscColorClass({ name: playerName })
-                  const initials = getPlayerInitials({ name: playerName })
+                  const discClass = getPlayerDiscColorClass(participant)
+                  const initials = getPlayerInitials(participant)
 
                   return (
                     <div key={`${battle.source_match_key}-${participant.source_player_hash || playerName}-${index}`} className="history-participant-row">

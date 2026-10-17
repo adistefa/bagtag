@@ -7,12 +7,31 @@ export const DISC_COLOR_VALUES = {
   'disc-mint': '#81E4C2',
 }
 
+export function normalizePlayerIdentityText(value) {
+  if (typeof value !== 'string') return ''
+
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function getPlayerDisplayName(player) {
   const fromName = typeof player?.name === 'string' ? player.name.trim() : ''
   if (fromName) return fromName
 
+  const fromSourceName = typeof player?.source_player_name === 'string' ? player.source_player_name.trim() : ''
+  if (fromSourceName) return fromSourceName
+
   const fromDisplayName = typeof player?.display_name === 'string' ? player.display_name.trim() : ''
   if (fromDisplayName) return fromDisplayName
+
+  const fromNormalizedName = typeof player?.normalized_player_name === 'string' ? player.normalized_player_name.trim() : ''
+  if (fromNormalizedName) return fromNormalizedName
 
   const fromUsername = typeof player?.username === 'string' ? player.username.trim() : ''
   if (fromUsername) return fromUsername
@@ -21,13 +40,31 @@ export function getPlayerDisplayName(player) {
 }
 
 export function getPlayerIdentitySeed(player) {
-  if (player?.id != null) return String(player.id)
-
-  const username = typeof player?.username === 'string' ? player.username.trim().toLowerCase() : ''
-  if (username) return username
-
   const display = getPlayerDisplayName(player)
-  return display ? display.toLowerCase() : ''
+  const normalizedDisplay = normalizePlayerIdentityText(display)
+  if (normalizedDisplay) return `name:${normalizedDisplay}`
+
+  const username = normalizePlayerIdentityText(typeof player?.username === 'string' ? player.username : '')
+  if (username) return `user:${username}`
+
+  const stableIdentity = [
+    player?.source_player_id,
+    player?.player_id,
+    player?.identity_key,
+    player?.participant_id,
+    player?.player_key,
+    player?.source_player_hash,
+  ]
+    .map((value) => normalizePlayerIdentityText(value == null ? '' : String(value)))
+    .find(Boolean)
+  if (stableIdentity) return `stable:${stableIdentity}`
+
+  if (player?.id != null) {
+    const idSeed = normalizePlayerIdentityText(String(player.id))
+    if (idSeed) return `id:${idSeed}`
+  }
+
+  return ''
 }
 
 export function getPlayerDiscColorClass(player) {

@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { redistributeTags } from './bagtag'
+import { getOwnerDisplayName } from './liveOwnership'
+
+describe('getOwnerDisplayName', () => {
+  it('prefers display_name, falls back to username, and handles blanks safely', () => {
+    expect(getOwnerDisplayName({ display_name: '  Alice  ', username: 'alice' })).toBe('Alice')
+    expect(getOwnerDisplayName({ display_name: '', username: 'alice' })).toBe('alice')
+    expect(getOwnerDisplayName({ display_name: null, username: '   ' })).toBe(null)
+    expect(getOwnerDisplayName({ display_name: undefined, username: undefined })).toBe(null)
+  })
+})
 
 describe('redistributeTags (authoritative rule: score ASC, then startingTag ASC)', () => {
   it('1. all unique scores', () => {

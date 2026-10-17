@@ -904,7 +904,7 @@ export default function NewMatch({
 
   return (
     <div className={`new-battle-screen ${isSearchExperimentActive ? 'new-battle-screen--search-active' : ''}`}>
-      <div className="battle-section battle-results-section">
+      <div className="battle-section battle-results-section battle-results-section--stable">
         <div className={`battle-results-header-shell ${isSearchExperimentActive ? 'battle-results-header-shell--search-active' : ''}`}>
           <div className="battle-results-headline-row">
             <div className="context-headline">RESULTS</div>
@@ -968,164 +968,166 @@ export default function NewMatch({
             <div className="battle-empty-state">Add at least two players to enter results.</div>
           )}
         </div>
+      </div>
 
-        {isSearchExperimentActive && (
-          <div
-            className={`battle-results-summary ${selectedSummaryHasOverflow ? 'battle-results-summary--scroll' : ''}`}
-            aria-live="polite"
-          >
-            {selectedPlayers.length === 0 ? (
-              <div className="battle-results-summary-empty">No players selected yet.</div>
-            ) : (
-              <div className="battle-results-grid" role="list" aria-label="Selected players">
-                {selectedPlayers.map((player) => (
-                  <div key={player.id} role="listitem">
-                    <CompactSelectedPlayerTile player={player} />
+      <div className="battle-scroll-region" aria-label="Battle content">
+        <div className="battle-scroll-region-inner">
+          {isSearchExperimentActive && (
+            <div
+              className={`battle-results-summary ${selectedSummaryHasOverflow ? 'battle-results-summary--scroll' : ''}`}
+              aria-live="polite"
+            >
+              {selectedPlayers.length === 0 ? (
+                <div className="battle-results-summary-empty">No players selected yet.</div>
+              ) : (
+                <div className="battle-results-grid" role="list" aria-label="Selected players">
+                  {selectedPlayers.map((player) => (
+                    <div key={player.id} role="listitem">
+                      <CompactSelectedPlayerTile player={player} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isSearchExperimentActive && selectedPlayers.length > 0 && (
+            <div className="results-player-list" role="list" aria-label="Ranking players" tabIndex={0}>
+              {resultsPlayers.map((player, index) => {
+                const isFinishMode = resultMode === 'finish'
+                const scoreValue = getNumericScoreValue(scores, player.id)
+                const scoreDisplay = formatBattleScoreDisplay(scores[player.id])
+                const isFirstPosition = index === 0
+                const isLastPosition = index === resultsPlayers.length - 1
+                const isDragActive = isFinishMode && draggedFinishId === player.id
+                const isDropTarget = isFinishMode && dropTargetFinishId === player.id
+                const rowClassName = [
+                  'battle-player-row',
+                  isFinishMode ? 'battle-player-row--finish' : 'battle-player-row--score',
+                  isDragActive ? 'is-drag-active' : '',
+                  isDropTarget && !isDragActive && dropPosition === 'before' ? 'drop-before' : '',
+                  isDropTarget && !isDragActive && dropPosition === 'after' ? 'drop-after' : '',
+                ].filter(Boolean).join(' ')
+
+                return (
+                  <div
+                    key={player.id}
+                    className={rowClassName}
+                    data-player-key={String(player.id)}
+                    role="listitem"
+                    aria-label={`Position ${index + 1}, ${player.name}`}
+                  >
+                    <div className="battle-player-header">
+                      <div className="battle-player-identity">
+                        <div className={`player-disc ${getPlayerDiscColorClass(player)}`} aria-hidden>
+                          <span className="player-disc-initials">{getPlayerInitials(player)}</span>
+                        </div>
+
+                        <div className="battle-player-meta">
+                          <div className="battle-player-name-line">
+                            <div className="player-name">{player.name}</div>
+                            <TagBadge className="player-tag-badge" number={player.tag} size={28} variant="inactive" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="battle-player-remove"
+                        aria-label={`Remove ${player.name}`}
+                        onClick={() => removePlayer(player.id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className={`battle-player-controls ${isFinishMode ? 'battle-player-controls--finish' : 'battle-player-controls--score'}`}>
+                      {isFinishMode ? (
+                        <>
+                          <div className="battle-finish-position">RANK {index + 1}</div>
+                          <div className="battle-order-actions">
+                            <button
+                              type="button"
+                              className="score-btn finish-move-btn"
+                              aria-label={`Move ${player.name} up`}
+                              disabled={isFirstPosition}
+                              onClick={(e) => { e.stopPropagation(); moveFinish(player.id, -1) }}
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              className="score-btn finish-move-btn"
+                              aria-label={`Move ${player.name} down`}
+                              disabled={isLastPosition}
+                              onClick={(e) => { e.stopPropagation(); moveFinish(player.id, +1) }}
+                            >
+                              ▼
+                            </button>
+                            <button
+                              type="button"
+                              className={`drag-handle ${isDragActive ? 'drag-handle--active' : ''}`}
+                              aria-label={`Drag to reorder ${player.name}`}
+                              onPointerDown={(e) => beginPointerDrag(e, player.id)}
+                              onDragStart={(e) => e.preventDefault()}
+                            >
+                              <span className="drag-grip" aria-hidden="true">⋮⋮</span>
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="score-control" onClick={(e) => e.stopPropagation()}>
+                          <button className="score-btn" aria-label={`Decrease ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, scoreValue - 1) }}>−</button>
+                          <div className={`score-display ${scoreDisplay.isBlank ? 'score-display--blank' : ''}`} aria-label={scoreDisplay.ariaLabel}>{scoreDisplay.text}</div>
+                          <button className="score-btn" aria-label={`Increase ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, scoreValue + 1) }}>+</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {!isSearchExperimentActive && previewResult && (
+            <div className="battle-preview-panel" style={{ marginTop: 16 }}>
+              <h3 style={{ margin: '6px 0' }}>Preview</h3>
+              <div style={{ borderTop: '1px solid var(--border)' }}>
+                {previewResult.rankedPlayers.map((r) => (
+                  <div key={r.id} className="result-player">
+                    <div className="result-left">
+                      <div className="result-pos">{r.position}</div>
+                      <div className="result-info">
+                        <div className="result-name">{r.name}</div>
+                        <div className="result-meta">{r.score == null ? 'ranking entry' : `${r.score} throws`}</div>
+                      </div>
+                    </div>
+                    <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
 
-        {!isSearchExperimentActive && selectedPlayers.length > 0 && (
-          <div className="results-player-list" role="list" aria-label="Ranking players" tabIndex={0}>
-            {resultsPlayers.map((player, index) => {
-              const isFinishMode = resultMode === 'finish'
-              const scoreValue = getNumericScoreValue(scores, player.id)
-              const scoreDisplay = formatBattleScoreDisplay(scores[player.id])
-              const isFirstPosition = index === 0
-              const isLastPosition = index === resultsPlayers.length - 1
-              const isDragActive = isFinishMode && draggedFinishId === player.id
-              const isDropTarget = isFinishMode && dropTargetFinishId === player.id
-              const rowClassName = [
-                'battle-player-row',
-                isFinishMode ? 'battle-player-row--finish' : 'battle-player-row--score',
-                isDragActive ? 'is-drag-active' : '',
-                isDropTarget && !isDragActive && dropPosition === 'before' ? 'drop-before' : '',
-                isDropTarget && !isDragActive && dropPosition === 'after' ? 'drop-after' : '',
-              ].filter(Boolean).join(' ')
-
-              return (
-                <div
-                  key={player.id}
-                  className={rowClassName}
-                  data-player-key={String(player.id)}
-                  role="listitem"
-                  aria-label={`Position ${index + 1}, ${player.name}`}
-                >
-                  <div className="battle-player-header">
-                    <div className="battle-player-identity">
-                      <div className={`player-disc ${getPlayerDiscColorClass(player)}`} aria-hidden>
-                        <span className="player-disc-initials">{getPlayerInitials(player)}</span>
-                      </div>
-
-                      <div className="battle-player-meta">
-                        <div className="battle-player-name-line">
-                          <div className="player-name">{player.name}</div>
-                          <TagBadge className="player-tag-badge" number={player.tag} size={28} variant="inactive" />
-                        </div>
+              <div className="exchanges">
+                <h4 style={{ margin: '8px 0' }}>Physical exchanges</h4>
+                {previewResult.exchanges.length === 0 ? (
+                  <div className="player-sub">All players keep their tags.</div>
+                ) : (
+                  previewResult.exchanges.map((ex, i) => (
+                    <div key={i} className="exchange">
+                      <div className="exchange-num">#{String(ex.tag)}</div>
+                      <div className="exchange-fromto">
+                        <div style={{ fontWeight: 700 }}>{ex.from} → {ex.to}</div>
+                        <div className="exchange-from">hand over</div>
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      className="battle-player-remove"
-                      aria-label={`Remove ${player.name}`}
-                      onClick={() => removePlayer(player.id)}
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <div className={`battle-player-controls ${isFinishMode ? 'battle-player-controls--finish' : 'battle-player-controls--score'}`}>
-                    {isFinishMode ? (
-                      <>
-                        <div className="battle-finish-position">RANK {index + 1}</div>
-                        <div className="battle-order-actions">
-                          <button
-                            type="button"
-                            className="score-btn finish-move-btn"
-                            aria-label={`Move ${player.name} up`}
-                            disabled={isFirstPosition}
-                            onClick={(e) => { e.stopPropagation(); moveFinish(player.id, -1) }}
-                          >
-                            ▲
-                          </button>
-                          <button
-                            type="button"
-                            className="score-btn finish-move-btn"
-                            aria-label={`Move ${player.name} down`}
-                            disabled={isLastPosition}
-                            onClick={(e) => { e.stopPropagation(); moveFinish(player.id, +1) }}
-                          >
-                            ▼
-                          </button>
-                          <button
-                            type="button"
-                            className={`drag-handle ${isDragActive ? 'drag-handle--active' : ''}`}
-                            aria-label={`Drag to reorder ${player.name}`}
-                            onPointerDown={(e) => beginPointerDrag(e, player.id)}
-                            onDragStart={(e) => e.preventDefault()}
-                          >
-                            <span className="drag-grip" aria-hidden="true">⋮⋮</span>
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="score-control" onClick={(e) => e.stopPropagation()}>
-                        <button className="score-btn" aria-label={`Decrease ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) - 1) }}>−</button>
-                        <div className={`score-display ${scoreDisplay.isBlank ? 'score-display--blank' : ''}`} aria-label={scoreDisplay.ariaLabel}>{scoreDisplay.text}</div>
-                        <button className="score-btn" aria-label={`Increase ${player.name} score`} onClick={(e) => { e.stopPropagation(); setScore(player.id, getNumericScoreValue(scores, player.id) + 1) }}>+</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {!isSearchExperimentActive && previewResult && (
-          <div className="battle-preview-panel" style={{ marginTop: 16 }}>
-            <h3 style={{ margin: '6px 0' }}>Preview</h3>
-            <div style={{ borderTop: '1px solid var(--border)' }}>
-              {previewResult.rankedPlayers.map((r) => (
-                <div key={r.id} className="result-player">
-                  <div className="result-left">
-                    <div className="result-pos">{r.position}</div>
-                    <div className="result-info">
-                      <div className="result-name">{r.name}</div>
-                      <div className="result-meta">{r.score == null ? 'ranking entry' : `${r.score} throws`}</div>
-                    </div>
-                  </div>
-                  <div className="tag-change">#{r.oldTag} → #{r.newTag}</div>
-                </div>
-              ))}
+                  ))
+                )}
+              </div>
             </div>
+          )}
 
-            <div className="exchanges">
-              <h4 style={{ margin: '8px 0' }}>Physical exchanges</h4>
-              {previewResult.exchanges.length === 0 ? (
-                <div className="player-sub">All players keep their tags.</div>
-              ) : (
-                previewResult.exchanges.map((ex, i) => (
-                  <div key={i} className="exchange">
-                    <div className="exchange-num">#{String(ex.tag)}</div>
-                    <div className="exchange-fromto">
-                      <div style={{ fontWeight: 700 }}>{ex.from} → {ex.to}</div>
-                      <div className="exchange-from">hand over</div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="battle-section battle-player-section">
-        <div className="context-headline">ADD PLAYERS</div>
+          <div className="battle-section battle-player-section">
+            <div className="context-headline">ADD PLAYERS</div>
 
         <div ref={searchAreaRef} className="search-area">
           <input
@@ -1209,32 +1211,32 @@ export default function NewMatch({
             )}
           </div>
         )}
-      </div>
+          </div>
 
-      <div className="battle-section battle-context-section">
-        <div className="context-headline">BATTLE CONTEXT</div>
-        <div className="battle-context-wrap">
-          <div className="battle-context">
-            <div className="battle-context-summary-card" aria-live="polite">
-              <div className="battle-context-summary-copy">
-                <div className="context-summary-primary">{contextSummary.primary}</div>
-                <div className="context-summary-secondary">{contextSummary.secondary}</div>
-              </div>
+          <div className="battle-section battle-context-section">
+            <div className="context-headline">BATTLE CONTEXT</div>
+            <div className="battle-context-wrap">
+              <div className="battle-context">
+                <div className="battle-context-summary-card" aria-live="polite">
+                  <div className="battle-context-summary-copy">
+                    <div className="context-summary-primary">{contextSummary.primary}</div>
+                    <div className="context-summary-secondary">{contextSummary.secondary}</div>
+                  </div>
 
-              <button
-                type="button"
-                className="context-summary-toggle"
-                aria-expanded={settingsOpen}
-                aria-controls="battle-context-settings"
-                onClick={() => setSettingsOpen((open) => !open)}
-              >
-                <span>{settingsOpen ? 'DONE' : 'EDIT'}</span>
-                <span aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    className="context-summary-toggle"
+                    aria-expanded={settingsOpen}
+                    aria-controls="battle-context-settings"
+                    onClick={() => setSettingsOpen((open) => !open)}
+                  >
+                    <span>{settingsOpen ? 'DONE' : 'EDIT'}</span>
+                    <span aria-hidden="true">{settingsOpen ? '▴' : '▾'}</span>
+                  </button>
+                </div>
 
-            {settingsOpen && (
-              <div id="battle-context-settings" className="context-settings">
+                {settingsOpen && (
+                  <div id="battle-context-settings" className="context-settings">
                 <div className="context-row context-row-tight">
                   <div className="context-label">LOCATION</div>
                   <div className="context-value" onClick={() => setLocationOpen(!locationOpen)} role="button" tabIndex={0}>
@@ -1337,8 +1339,10 @@ export default function NewMatch({
                     />
                   </div>
                 </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
