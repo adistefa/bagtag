@@ -1,6 +1,14 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import TagBadge from './TagBadge'
 import { getPlayerDiscColorClass, getPlayerInitials } from '../utils/playerIdentityVisuals'
+import {
+  OWNER_GROUP,
+  PLAYER_NAME_SORT_MODE,
+  TAG_SORT_MODE,
+  buildTagEntries,
+  classifyOwner,
+  sortTagEntries,
+} from '../utils/leaderboardSort'
 
 function TagRow({ tag, owner, index }) {
   const isAssigned = !!owner
@@ -26,8 +34,49 @@ function TagRow({ tag, owner, index }) {
 
 const TOTAL_TAGS = 100
 
+const SORT_OPTIONS = [
+  { key: TAG_SORT_MODE, label: 'TAG NUMBER' },
+  { key: PLAYER_NAME_SORT_MODE, label: 'PLAYER NAME' },
+]
+
+function sortSectionLabel(group) {
+  if (group === OWNER_GROUP.KNOWN) return 'CONFIRMED PLAYERS'
+  if (group === OWNER_GROUP.UNKNOWN_OR_UNASSIGNED) return 'UNKNOWN / UNASSIGNED'
+  return 'OWNERSHIP CONFLICTS'
+}
+
 export default function Leaderboard({ owners = new Map(), loading = false, error = null, onOwnershipStatsChange }) {
-  const tags = Array.from({ length: TOTAL_TAGS }, (_, i) => i + 1)
+  const [sortMode, setSortMode] = useState(TAG_SORT_MODE)
+
+  const sortedEntries = useMemo(() => {
+    const entries = buildTagEntries(owners, TOTAL_TAGS)
+    return sortTagEntries(entries, sortMode)
+  }, [owners, sortMode])
+
+  const groupedEntries = useMemo(() => {
+    if (sortMode !== PLAYER_NAME_SORT_MODE) {
+      return [{ key: 'all-tags', label: null, entries: sortedEntries }]
+    }
+
+    const byGroup = {
+      [OWNER_GROUP.KNOWN]: [],
+      [OWNER_GROUP.UNKNOWN_OR_UNASSIGNED]: [],
+      [OWNER_GROUP.CONFLICT]: [],
+    }
+
+    sortedEntries.forEach((entry) => {
+      const group = classifyOwner(entry.owner)
+      byGroup[group].push(entry)
+    })
+
+    return [OWNER_GROUP.KNOWN, OWNER_GROUP.UNKNOWN_OR_UNASSIGNED, OWNER_GROUP.CONFLICT]
+      .filter((group) => byGroup[group].length > 0)
+      .map((group) => ({
+        key: group,
+        label: sortSectionLabel(group),
+        entries: byGroup[group],
+      }))
+  }, [sortedEntries, sortMode])
 
   useEffect(() => {
     if (typeof onOwnershipStatsChange !== 'function') return
@@ -40,14 +89,38 @@ export default function Leaderboard({ owners = new Map(), loading = false, error
     })
   }, [onOwnershipStatsChange, owners, loading, error])
 
+  let rowIndex = -1
+
   return (
     <div className="leaderboard-list">
+      <div className="leaderboard-header">
+        <h2 className="leaderboard-title">BAGTAGS</h2>
+        <div className="leaderboard-sort" role="group" aria-label="Bagtags sort order">
+          {SORT_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={`leaderboard-sort-btn ${sortMode === option.key ? 'leaderboard-sort-btn--active' : ''}`}
+              aria-pressed={sortMode === option.key}
+              onClick={() => setSortMode(option.key)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading && <div className="loader">Loading tags…</div>}
       {error && <div className="error">Unable to load leaderboard — check console.</div>}
-      {tags.map((t, index) => {
-        const owner = owners instanceof Map ? owners.get(t) : undefined
-        return <TagRow key={t} tag={t} owner={owner} index={index} />
-      })}
+      {groupedEntries.map((section) => (
+        <React.Fragment key={section.key}>
+          {section.label && <div className="leaderboard-group-label">{section.label}</div>}
+          {section.entries.map((entry) => {
+            rowIndex += 1
+            return <TagRow key={entry.tag} tag={entry.tag} owner={entry.owner} index={rowIndex} />
+          })}
+        </React.Fragment>
+      ))}
 
       {!loading && owners instanceof Map && owners.size === 0 && (
         <div className="empty">No assigned tags found.</div>
