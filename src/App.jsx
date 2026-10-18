@@ -280,7 +280,7 @@ function App() {
 
           {historyTab === 'players' && <PlayerTimeline linkedPlayerId={historyPlayerId} />}
 
-          {historyTab === 'tags' && <TagHistory selectedTag={historyTag} />}
+          {historyTab === 'tags' && <TagHistory selectedTag={historyTag} onSelectTag={handleOpenTagHistory} />}
         </div>
       </main>
 
