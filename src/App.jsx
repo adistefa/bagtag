@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import './index.css'
 import { redistributeTags } from './utils/bagtag'
@@ -7,11 +7,14 @@ import NewMatch from './components/NewMatch'
 import MatchResult from './components/MatchResult'
 import HistoricalBattleHistory from './components/HistoricalBattleHistory'
 import PlayerTimeline from './components/PlayerTimeline'
+import TagHistory from './components/TagHistory'
 import BottomNav from './components/BottomNav'
 import ScreenTitle from './components/ScreenTitle'
 import AnnouncementTicker from './components/AnnouncementTicker'
 import { mapOwnersToBattlePlayers } from './utils/liveOwnership'
 import { getPreviewRosterOwners, PREVIEW_DATA_SOURCE } from './data/previewRoster'
+import { getHistoricalArchive } from './data/historicalArchive'
+import { getHistoricalPlayerIdFromDisplayName, getHistoricalPlayerOptions } from './utils/playerTimeline'
 import {
   DEFAULT_HISTORY_TAB,
   DEFAULT_MAIN_VIEW,
@@ -74,8 +77,18 @@ function App() {
   const [navigation, setNavigation] = useState(() => readNavigationStateFromLocation(window.location))
   const [lastResult, setLastResult] = useState(null)
   const [confirmApi, setConfirmApi] = useState(null)
-  const { view, historyTab } = navigation
+  const { view, historyTab, historyPlayerId, historyTag } = navigation
   const isBattleView = view === 'battle'
+  const historicalArchive = useMemo(() => getHistoricalArchive(), [])
+  const historicalPlayers = useMemo(() => getHistoricalPlayerOptions(historicalArchive), [historicalArchive])
+  const historicalPlayerIds = useMemo(() => new Set(historicalPlayers.map((player) => player.id)), [historicalPlayers])
+
+  function getReliablePlayerHistoryId(owner) {
+    if (!owner || owner.status !== 'known') return null
+    const playerId = getHistoricalPlayerIdFromDisplayName(owner.name)
+    if (!playerId) return null
+    return historicalPlayerIds.has(playerId) ? playerId : null
+  }
 
   useEffect(() => {
     setPlayersLoading(true)
@@ -139,6 +152,8 @@ function App() {
         {
           view: nextPartial.view ?? current.view,
           historyTab: nextPartial.historyTab ?? current.historyTab,
+          historyPlayerId: nextPartial.historyPlayerId ?? current.historyPlayerId,
+          historyTag: nextPartial.historyTag ?? current.historyTag,
         },
         current.historyTab || DEFAULT_HISTORY_TAB
       )
@@ -172,7 +187,16 @@ function App() {
 
   function handleSelectHistoryTab(nextTab) {
     const normalizedTab = normalizeHistoryTab(nextTab)
-    navigateTo({ view: 'history', historyTab: normalizedTab })
+    navigateTo({ view: 'history', historyTab: normalizedTab, historyPlayerId: null, historyTag: null })
+  }
+
+  function handleOpenPlayerHistory(playerHistoryId) {
+    if (!playerHistoryId) return
+    navigateTo({ view: 'history', historyTab: 'players', historyPlayerId: playerHistoryId, historyTag: null })
+  }
+
+  function handleOpenTagHistory(tagNumber) {
+    navigateTo({ view: 'history', historyTab: 'tags', historyTag: tagNumber, historyPlayerId: null })
   }
 
   function handleApplyResult(result) {
@@ -209,7 +233,14 @@ function App() {
       <main className={isBattleView ? 'app-main app-main--battle' : 'app-main'}>
         <div className={`view-panel ${view === 'bagtags' ? 'is-visible' : 'is-hidden'}`}>
           <div className="tags-list" title={PREVIEW_DATA_SOURCE}>
-            <Leaderboard owners={owners} loading={playersLoading} error={playersError} />
+            <Leaderboard
+              owners={owners}
+              loading={playersLoading}
+              error={playersError}
+              getPlayerHistoryId={getReliablePlayerHistoryId}
+              onOpenPlayerHistory={handleOpenPlayerHistory}
+              onOpenTagHistory={handleOpenTagHistory}
+            />
           </div>
         </div>
 
@@ -247,14 +278,9 @@ function App() {
         <div className={`view-panel ${view === 'history' ? 'is-visible' : 'is-hidden'}`}>
           {historyTab === 'matches' && <HistoricalBattleHistory />}
 
-          {historyTab === 'players' && <PlayerTimeline />}
+          {historyTab === 'players' && <PlayerTimeline linkedPlayerId={historyPlayerId} />}
 
-          {historyTab === 'tags' && (
-            <div className="history-placeholder">
-              <h2 className="section-title">TAG JOURNEY</h2>
-              <div className="section-sub">Coming soon.</div>
-            </div>
-          )}
+          {historyTab === 'tags' && <TagHistory selectedTag={historyTag} />}
         </div>
       </main>
 

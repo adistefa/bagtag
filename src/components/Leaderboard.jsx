@@ -10,12 +10,24 @@ import {
   sortTagEntries,
 } from '../utils/leaderboardSort'
 
-function TagRow({ tag, owner, index }) {
+function TagRow({ tag, owner, index, playerHistoryId = null, onOpenPlayerHistory, onOpenTagHistory }) {
   const isAssigned = !!owner
   const displayName = isAssigned && typeof owner.name === 'string' && owner.name.trim() ? owner.name.trim() : 'Available'
   const rowTone = index % 2 === 0 ? 'tone-pine' : 'tone-moss'
   const discClass = isAssigned ? getPlayerDiscColorClass(owner) : ''
   const initials = isAssigned ? getPlayerInitials(owner) : ''
+  const hasReliablePlayerHistory = typeof playerHistoryId === 'string' && playerHistoryId.trim() !== ''
+  const isKnownWithoutHistory = isAssigned && owner.status === 'known' && !hasReliablePlayerHistory
+
+  function handleOpenPlayerHistory() {
+    if (!hasReliablePlayerHistory || typeof onOpenPlayerHistory !== 'function') return
+    onOpenPlayerHistory(playerHistoryId)
+  }
+
+  function handleOpenTagHistory() {
+    if (typeof onOpenTagHistory !== 'function') return
+    onOpenTagHistory(tag)
+  }
 
   return (
     <div className={`tag-row ${rowTone} ${isAssigned ? 'is-assigned' : 'is-unassigned'}`}>
@@ -24,10 +36,33 @@ function TagRow({ tag, owner, index }) {
       ) : (
         <div className="available-label">Available</div>
       )}
-      <div className="tag-owner" title={displayName}>
-        <div className="owner-name">{displayName}</div>
-      </div>
-      <TagBadge className="physical-tag-badge" number={tag} size={44} variant={isAssigned ? 'inactive' : 'unassigned'} />
+
+      {hasReliablePlayerHistory ? (
+        <button
+          type="button"
+          className="tag-owner-link"
+          onClick={handleOpenPlayerHistory}
+          title={`Open player history for ${displayName}`}
+          aria-label={`Open player history for ${displayName}`}
+        >
+          <span className="owner-name">{displayName}</span>
+        </button>
+      ) : (
+        <div className="tag-owner" title={displayName}>
+          <div className="owner-name">{displayName}</div>
+          {isKnownWithoutHistory && <div className="owner-history-unavailable">History unavailable</div>}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="tag-history-link"
+        onClick={handleOpenTagHistory}
+        title={`Open tag history for #${tag}`}
+        aria-label={`Open tag history for #${tag}`}
+      >
+        <TagBadge className="physical-tag-badge" number={tag} size={44} variant={isAssigned ? 'inactive' : 'unassigned'} />
+      </button>
     </div>
   )
 }
@@ -45,7 +80,15 @@ function sortSectionLabel(group) {
   return 'OWNERSHIP CONFLICTS'
 }
 
-export default function Leaderboard({ owners = new Map(), loading = false, error = null, onOwnershipStatsChange }) {
+export default function Leaderboard({
+  owners = new Map(),
+  loading = false,
+  error = null,
+  onOwnershipStatsChange,
+  getPlayerHistoryId,
+  onOpenPlayerHistory,
+  onOpenTagHistory,
+}) {
   const [sortMode, setSortMode] = useState(TAG_SORT_MODE)
 
   const sortedEntries = useMemo(() => {
@@ -117,7 +160,18 @@ export default function Leaderboard({ owners = new Map(), loading = false, error
           {section.label && <div className="leaderboard-group-label">{section.label}</div>}
           {section.entries.map((entry) => {
             rowIndex += 1
-            return <TagRow key={entry.tag} tag={entry.tag} owner={entry.owner} index={rowIndex} />
+            const playerHistoryId = typeof getPlayerHistoryId === 'function' ? getPlayerHistoryId(entry.owner) : null
+            return (
+              <TagRow
+                key={entry.tag}
+                tag={entry.tag}
+                owner={entry.owner}
+                index={rowIndex}
+                playerHistoryId={playerHistoryId}
+                onOpenPlayerHistory={onOpenPlayerHistory}
+                onOpenTagHistory={onOpenTagHistory}
+              />
+            )
           })}
         </React.Fragment>
       ))}

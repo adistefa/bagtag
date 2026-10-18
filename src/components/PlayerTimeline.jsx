@@ -304,7 +304,7 @@ function formatLocation(location) {
   return location
 }
 
-export default function PlayerTimeline() {
+export default function PlayerTimeline({ linkedPlayerId = null }) {
   const archive = useMemo(() => getHistoricalArchive(), [])
   const allPlayers = useMemo(() => getHistoricalPlayerOptions(archive), [archive])
   const [searchQuery, setSearchQuery] = useState('')
@@ -339,6 +339,19 @@ export default function PlayerTimeline() {
       return validIds
     })
   }, [allPlayers])
+
+  useEffect(() => {
+    if (linkedPlayerId == null) return
+
+    if (!allPlayers.some((player) => player.id === linkedPlayerId)) {
+      setSelectedPlayerIds([])
+      setSelectionMessage('No historical records are available for the requested player identity.')
+      return
+    }
+
+    setSelectionMessage('')
+    setSelectedPlayerIds([linkedPlayerId])
+  }, [allPlayers, linkedPlayerId])
 
   const filteredPlayers = useMemo(
     () => searchHistoricalPlayers(allPlayers, searchQuery),

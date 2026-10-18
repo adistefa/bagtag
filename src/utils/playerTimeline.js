@@ -16,6 +16,15 @@ function canonicalHistoricalPlayerName(value) {
     .trim()
 }
 
+export function canonicalizeHistoricalPlayerName(value) {
+  return canonicalHistoricalPlayerName(value)
+}
+
+export function getHistoricalPlayerIdFromDisplayName(displayName) {
+  const normalized = canonicalHistoricalPlayerName(displayName)
+  return normalized ? `name:${normalized}` : null
+}
+
 export function getPlayerTimelineIdentityKey(participant) {
   if (!participant || typeof participant !== 'object') return 'unknown-player'
 

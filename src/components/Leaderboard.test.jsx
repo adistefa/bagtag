@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from '@testing-library/react'
 import { cleanup, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Leaderboard from './Leaderboard'
 import { getPreviewRosterOwners } from '../data/previewRoster'
 
@@ -62,5 +62,51 @@ describe('Leaderboard sorting UI', () => {
     fireEvent.click(ui.getByRole('button', { name: 'TAG NUMBER' }))
 
     expect(JSON.stringify([...owners.entries()])).toBe(snapshot)
+  })
+
+  it('opens player and tag history with distinct actions for confirmed owners', () => {
+    const owners = getPreviewRosterOwners()
+    const onOpenPlayerHistory = vi.fn()
+    const onOpenTagHistory = vi.fn()
+
+    const { container } = render(
+      <Leaderboard
+        owners={owners}
+        loading={false}
+        error={null}
+        getPlayerHistoryId={(owner) => (owner?.name === 'Chris Walker' ? 'name:chris walker' : null)}
+        onOpenPlayerHistory={onOpenPlayerHistory}
+        onOpenTagHistory={onOpenTagHistory}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open player history for Chris Walker' }))
+    expect(onOpenPlayerHistory).toHaveBeenCalledWith('name:chris walker')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open tag history for #1' }))
+    expect(onOpenTagHistory).toHaveBeenCalledWith(1)
+
+    expect(container.querySelectorAll('.tag-row').length).toBe(100)
+  })
+
+  it('keeps player history action unavailable for unknown and conflict owners', () => {
+    const owners = getPreviewRosterOwners()
+    const { container } = render(
+      <Leaderboard
+        owners={owners}
+        loading={false}
+        error={null}
+        getPlayerHistoryId={() => null}
+        onOpenPlayerHistory={() => {}}
+        onOpenTagHistory={() => {}}
+      />
+    )
+
+    const unknownRow = [...container.querySelectorAll('.tag-row')].find((row) => row.textContent.includes('Unknown owner'))
+    const conflictRow = [...container.querySelectorAll('.tag-row')].find((row) => row.textContent.includes('Conflict: Gregory Klisch / Lucas Wolharn'))
+
+    expect(unknownRow.querySelector('.tag-owner-link')).toBeNull()
+    expect(conflictRow.querySelector('.tag-owner-link')).toBeNull()
+    expect(conflictRow.querySelector('.tag-history-link')).toBeTruthy()
   })
 })

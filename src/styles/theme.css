@@ -135,6 +135,14 @@ body{
 .tag-owner{display:flex;flex-direction:column;min-width:0;flex:1}
 .owner-name{font-weight:700;font-size:13px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tag-row.is-unassigned .owner-name{color:var(--text-secondary);font-weight:600}
+.owner-history-unavailable{font-size:11px;line-height:1.25;color:var(--text-secondary);margin-top:2px}
+
+.tag-owner-link{display:flex;align-items:center;min-width:0;flex:1;padding:8px 6px;border:1px solid transparent;border-radius:8px;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.tag-owner-link:hover{background:rgba(233,244,91,0.1)}
+.tag-owner-link:focus-visible,.tag-history-link:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+
+.tag-history-link{display:inline-flex;align-items:center;justify-content:center;padding:4px;border:none;background:transparent;border-radius:999px;cursor:pointer;margin-left:auto}
+.tag-history-link:hover .physical-tag-badge{border-color:var(--disc-lemon);box-shadow:0 0 0 1px rgba(233,244,91,0.24) inset}
 
 @media (max-width: 360px){
   .leaderboard-header{align-items:flex-start;flex-direction:column;gap:8px}
@@ -418,6 +426,13 @@ body.is-dragging-finish{overflow:hidden;touch-action:none}
 .history-search-area{position:sticky;top:0;z-index:12;padding:10px 12px;background:linear-gradient(180deg, rgba(8,26,19,0.96), rgba(8,26,19,0.88) 72%, rgba(8,26,19,0));border-radius:0 0 12px 12px;backdrop-filter:blur(8px)}
 .history-search-meta{font-size:12px;color:var(--text-secondary);padding:0 2px}
 .history-empty-state{padding:12px;border-radius:10px;background:rgba(8,26,19,0.34);border:1px solid rgba(246,246,241,0.08);color:var(--text-secondary);font-size:13px}
+.tag-history-header{padding:0 2px}
+.tag-history-card{display:flex;flex-direction:column;gap:8px}
+.tag-history-row{display:flex;flex-direction:column;gap:4px}
+.tag-history-player{font-weight:800;font-size:14px;color:var(--text-primary);word-break:break-word}
+.tag-history-move{font-size:13px;color:var(--text-primary);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tag-history-arrow{color:var(--text-secondary)}
+.tag-history-relation{font-size:12px;color:var(--text-secondary);line-height:1.35}
 .player-timeline{display:flex;flex-direction:column;gap:12px}
 .player-timeline-search-area{padding:10px 12px}
 .player-select-wrap{display:flex;flex-direction:column;gap:6px}
