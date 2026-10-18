@@ -12,7 +12,16 @@ import ScreenTitle from './components/ScreenTitle'
 import AnnouncementTicker from './components/AnnouncementTicker'
 import { mapOwnersToBattlePlayers } from './utils/liveOwnership'
 import { getPreviewRosterOwners, PREVIEW_DATA_SOURCE } from './data/previewRoster'
-import { DEFAULT_MAIN_VIEW, HISTORY_TABS, MAIN_VIEW_ORDER } from './utils/navigation'
+import {
+  DEFAULT_HISTORY_TAB,
+  DEFAULT_MAIN_VIEW,
+  HISTORY_TABS,
+  buildNavigationUrl,
+  isSameDestination,
+  normalizeHistoryTab,
+  normalizeNavigationState,
+  readNavigationStateFromLocation,
+} from './utils/navigation'
 
 function buildResultFromRankingOrder(playersInRanking = []) {
   if (!Array.isArray(playersInRanking) || playersInRanking.length === 0) {
@@ -62,10 +71,10 @@ function App() {
   const [playersLoading, setPlayersLoading] = useState(true)
   const [playersError, setPlayersError] = useState(null)
   const [dataInconsistencies, setDataInconsistencies] = useState([])
-  const [view, setView] = useState(DEFAULT_MAIN_VIEW)
-  const [historyTab, setHistoryTab] = useState('matches')
+  const [navigation, setNavigation] = useState(() => readNavigationStateFromLocation(window.location))
   const [lastResult, setLastResult] = useState(null)
   const [confirmApi, setConfirmApi] = useState(null)
+  const { view, historyTab } = navigation
   const isBattleView = view === 'battle'
 
   useEffect(() => {
@@ -90,27 +99,101 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const parsed = readNavigationStateFromLocation(window.location, {
+      fallbackHistoryTab: navigation.historyTab,
+    })
+
+    const canonicalUrl = buildNavigationUrl(parsed, window.location)
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+    if (canonicalUrl !== currentUrl) {
+      window.history.replaceState({}, '', canonicalUrl)
+    }
+
+    setNavigation(parsed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    function handlePopState() {
+      const parsed = readNavigationStateFromLocation(window.location, {
+        fallbackHistoryTab: navigation.historyTab,
+      })
+
+      setNavigation((current) => normalizeNavigationState(parsed, current.historyTab || DEFAULT_HISTORY_TAB))
+      if (parsed.view !== 'battle') {
+        setLastResult(null)
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [navigation.historyTab])
+
+  function navigateTo(nextPartial, options = {}) {
+    const mode = options.mode || 'push'
+
+    setNavigation((current) => {
+      const candidate = normalizeNavigationState(
+        {
+          view: nextPartial.view ?? current.view,
+          historyTab: nextPartial.historyTab ?? current.historyTab,
+        },
+        current.historyTab || DEFAULT_HISTORY_TAB
+      )
+
+      if (isSameDestination(current, candidate)) {
+        return current
+      }
+
+      const nextUrl = buildNavigationUrl(candidate, window.location)
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+      if (nextUrl !== currentUrl) {
+        if (mode === 'replace') {
+          window.history.replaceState({}, '', nextUrl)
+        } else {
+          window.history.pushState({}, '', nextUrl)
+        }
+      }
+
+      if (candidate.view !== 'battle') {
+        setLastResult(null)
+      }
+
+      return candidate
+    })
+  }
+
   function handleSelectMainView(nextView) {
-    const normalized = MAIN_VIEW_ORDER.includes(nextView) ? nextView : DEFAULT_MAIN_VIEW
-    setView(normalized)
-    if (normalized !== 'battle') {
-      setLastResult(null)
-    }
-    if (normalized === 'history') {
-      setHistoryTab('matches')
-    }
+    navigateTo({ view: nextView })
+  }
+
+  function handleSelectHistoryTab(nextTab) {
+    const normalizedTab = normalizeHistoryTab(nextTab)
+    navigateTo({ view: 'history', historyTab: normalizedTab })
   }
 
   function handleApplyResult(result) {
-    const updated = players.map((p) => {
-      const rp = result.rankedPlayers.find((r) => r.id === p.id)
-      if (rp) return { ...p, tag: rp.newTag }
-      return p
+    setPlayers((currentPlayers) => {
+      return currentPlayers.map((p) => {
+        const rp = result.rankedPlayers.find((r) => r.id === p.id)
+        if (rp) return { ...p, tag: rp.newTag }
+        return p
+      })
     })
-    setPlayers(updated)
     setLastResult(result)
-    setView('battle')
+    if (view !== 'battle') {
+      navigateTo({ view: 'battle' }, { mode: 'replace' })
+    }
   }
+
+  useEffect(() => {
+    if (view !== 'battle') {
+      setLastResult(null)
+    }
+  }, [view])
 
   const currentScreenTitle = view === 'battle' ? 'BATTLE' : view === 'history' ? 'HISTORY' : 'BAGTAG'
 
@@ -184,7 +267,7 @@ function App() {
               role="tab"
               aria-selected={historyTab === tab}
               className={`history-subnav-item ${historyTab === tab ? 'history-subnav-item--active' : ''}`}
-              onClick={() => setHistoryTab(tab)}
+              onClick={() => handleSelectHistoryTab(tab)}
             >
               {tab.toUpperCase()}
             </button>
