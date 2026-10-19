@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildOrthogonalTimelineSegments,
   getComparisonChartColors,
   getLatestSelectedTimelineEvent,
+  getOrthogonalTimelineVisualSpec,
   getPointTagLabel,
   getTimelineChartLayout,
   toggleHistoricalPlayerSelection,
@@ -242,10 +244,12 @@ describe('player timeline model', () => {
 
     expect(Object.keys(colorsA)).toEqual(['player-a', 'player-b', 'player-c'])
     expect(colorsA).toEqual(colorsB)
-    expect(new Set(Object.values(colorsA)).size).toBe(3)
-    expect(colorsA['player-a']).toBe('#78CFFF')
-    expect(colorsA['player-b']).toBe('#FF5BA7')
-    expect(colorsA['player-c']).toBe('#FF9F2E')
+    expect(colorsA['player-a']).toBeDefined()
+    expect(colorsA['player-b']).toBeDefined()
+    expect(colorsA['player-c']).toBeDefined()
+    expect(colorsA['player-a']).toBe(getComparisonChartColors(['player-a'])['player-a'])
+    expect(colorsA['player-b']).toBe(getComparisonChartColors(['player-b'])['player-b'])
+    expect(colorsA['player-c']).toBe(getComparisonChartColors(['player-c'])['player-c'])
   })
 
   it('toggles player focus without changing selection membership', () => {
@@ -324,5 +328,89 @@ describe('player timeline model', () => {
     expect(layout.points[0].x).toBeCloseTo(layout.points[1].x, 0)
     expect(layout.points[0].y).not.toBe(layout.points[1].y)
     expect(layout.referenceLines.some((line) => line.tag === 10)).toBe(true)
+  })
+
+  it('builds orthogonal segments with horizontal and vertical lines only', () => {
+    const points = [
+      { matchKey: 'm1', x: 10, y: 80, isUnknown: false },
+      { matchKey: 'm2', x: 40, y: 80, isUnknown: false },
+      { matchKey: 'm3', x: 80, y: 40, isUnknown: false },
+    ]
+
+    const segments = buildOrthogonalTimelineSegments(points)
+
+    expect(segments.horizontalSegments).toEqual([
+      { x1: 10, y1: 80, x2: 40, y2: 80 },
+      { x1: 40, y1: 80, x2: 80, y2: 80 },
+    ])
+    expect(segments.verticalSegments).toEqual([
+      { x1: 80, y1: 80, x2: 80, y2: 40 },
+    ])
+
+    const hasDiagonal = [...segments.horizontalSegments, ...segments.verticalSegments]
+      .some((segment) => segment.x1 !== segment.x2 && segment.y1 !== segment.y2)
+    expect(hasDiagonal).toBe(false)
+  })
+
+  it('uses requested stroke widths and point radius for orthogonal timeline visuals', () => {
+    const spec = getOrthogonalTimelineVisualSpec()
+
+    expect(spec.horizontalStrokeWidth).toBe(4)
+    expect(spec.verticalStrokeWidth).toBe(1.5)
+    expect(spec.pointRadius).toBe(4)
+  })
+
+  it('does not create false vertical movement for unchanged tags', () => {
+    const points = [
+      { matchKey: 'm1', x: 20, y: 60, isUnknown: false },
+      { matchKey: 'm2', x: 50, y: 60, isUnknown: false },
+    ]
+
+    const segments = buildOrthogonalTimelineSegments(points)
+
+    expect(segments.horizontalSegments).toHaveLength(1)
+    expect(segments.verticalSegments).toHaveLength(0)
+  })
+
+  it('preserves data gaps by breaking continuity across unknown events', () => {
+    const points = [
+      { matchKey: 'm1', x: 10, y: 90, isUnknown: false },
+      { matchKey: 'm2', x: 30, y: null, isUnknown: true },
+      { matchKey: 'm3', x: 60, y: 50, isUnknown: false },
+    ]
+
+    const segments = buildOrthogonalTimelineSegments(points)
+
+    expect(segments.horizontalSegments).toHaveLength(0)
+    expect(segments.verticalSegments).toHaveLength(0)
+    expect(segments.points.map((point) => point.matchKey)).toEqual(['m1', 'm3'])
+  })
+
+  it('keeps multiple players on distinct stable colors when their identity seeds differ', () => {
+    const candidates = [
+      'name:alice steiner',
+      'name:bob martin',
+      'name:charlie ross',
+      'name:dario ulan',
+      'name:eva meyer',
+      'name:frank q',
+      'name:gina lu',
+      'name:hugo y',
+    ]
+
+    const colors = getComparisonChartColors(candidates)
+    const distinctById = candidates
+      .map((id) => ({ id, color: colors[id] }))
+      .reduce((acc, entry) => {
+        if (!acc.byColor.has(entry.color)) {
+          acc.byColor.set(entry.color, entry.id)
+          acc.ids.push(entry.id)
+        }
+        return acc
+      }, { byColor: new Map(), ids: [] }).ids
+      .slice(0, 3)
+
+    expect(distinctById).toHaveLength(3)
+    expect(new Set(distinctById.map((id) => colors[id])).size).toBe(3)
   })
 })

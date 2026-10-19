@@ -3,39 +3,90 @@ import { getHistoricalArchive } from '../data/historicalArchive'
 import { getHistoricalPlayerOptions, getPlayerTimelineEntries, searchHistoricalPlayers, hasContinuityGap } from '../utils/playerTimeline'
 import { DISC_COLOR_VALUES, getPlayerDiscColorClass } from '../utils/playerIdentityVisuals'
 
-const DISC_COLORS = DISC_COLOR_VALUES
-
 const DAY_IN_MS = 24 * 60 * 60 * 1000
 const REFERENCE_TAGS = [10, 20, 40]
-const COMPARISON_COLOR_PALETTE = ['#78CFFF', '#FF5BA7', '#FF9F2E']
+const ORTHOGONAL_TIMELINE_VISUAL_SPEC = Object.freeze({
+  horizontalStrokeWidth: 4,
+  verticalStrokeWidth: 1.5,
+  pointRadius: 4,
+})
+
+export function getOrthogonalTimelineVisualSpec() {
+  return ORTHOGONAL_TIMELINE_VISUAL_SPEC
+}
+
+function getStablePlayerChartColor(playerId) {
+  const colorClass = getPlayerDiscColorClass({ id: playerId })
+  return DISC_COLOR_VALUES[colorClass] || DISC_COLOR_VALUES['disc-white']
+}
 
 export function getComparisonChartColors(selectedPlayerIds, previousColors = {}) {
   const uniqueIds = Array.from(new Set((selectedPlayerIds || []).filter(Boolean)))
   const nextColors = {}
-  const preservedIds = []
+  const fallback = previousColors || {}
 
-  for (const playerId of uniqueIds) {
-    if (previousColors[playerId]) {
-      nextColors[playerId] = previousColors[playerId]
-      preservedIds.push(playerId)
-    }
-  }
-
-  const remainingPalette = COMPARISON_COLOR_PALETTE.filter((color) => !Object.values(nextColors).includes(color))
-  const remainingIds = uniqueIds
-    .filter((playerId) => !Object.prototype.hasOwnProperty.call(nextColors, playerId))
-    .sort((a, b) => a.localeCompare(b))
-
-  for (const playerId of remainingIds) {
-    const color = remainingPalette.shift()
-    if (color) {
-      nextColors[playerId] = color
-    }
+  for (const playerId of uniqueIds.sort((a, b) => a.localeCompare(b))) {
+    nextColors[playerId] = getStablePlayerChartColor(playerId) || fallback[playerId] || DISC_COLOR_VALUES['disc-white']
   }
 
   return Object.fromEntries(
     Object.entries(nextColors).sort(([left], [right]) => left.localeCompare(right))
   )
+}
+
+export function buildOrthogonalTimelineSegments(points = []) {
+  const horizontalSegments = []
+  const verticalSegments = []
+  const drawablePoints = []
+  let previousPoint = null
+
+  for (const point of points) {
+    const hasCoordinates = Number.isFinite(point?.x) && Number.isFinite(point?.y)
+
+    if (!hasCoordinates || point?.isUnknown) {
+      previousPoint = null
+      continue
+    }
+
+    const normalizedPoint = {
+      ...point,
+      x: Number(point.x),
+      y: Number(point.y),
+    }
+
+    drawablePoints.push(normalizedPoint)
+
+    if (!previousPoint) {
+      previousPoint = normalizedPoint
+      continue
+    }
+
+    if (normalizedPoint.x !== previousPoint.x) {
+      horizontalSegments.push({
+        x1: previousPoint.x,
+        y1: previousPoint.y,
+        x2: normalizedPoint.x,
+        y2: previousPoint.y,
+      })
+    }
+
+    if (normalizedPoint.y !== previousPoint.y) {
+      verticalSegments.push({
+        x1: normalizedPoint.x,
+        y1: previousPoint.y,
+        x2: normalizedPoint.x,
+        y2: normalizedPoint.y,
+      })
+    }
+
+    previousPoint = normalizedPoint
+  }
+
+  return {
+    horizontalSegments,
+    verticalSegments,
+    points: drawablePoints,
+  }
 }
 
 export function togglePlayerFocus(currentFocusedPlayerId, playerId) {
@@ -138,14 +189,15 @@ export function getTimelineChartLayout(events, options = {}) {
       const sameDayEvents = dateBuckets.get(dateKey) || []
       const sameDayIndex = sameDayEvents.findIndex((item) => item.matchKey === event.matchKey)
       const x = xForDate(event.dateMs)
-      const numericTag = event.resultTag == null ? minTag : Number(event.resultTag)
-      const y = yForTag(numericTag)
+      const numericTag = Number(event.resultTag)
+      const hasKnownTag = Number.isFinite(numericTag)
+      const y = hasKnownTag ? yForTag(numericTag) : null
 
       return {
         ...event,
         x,
         y,
-        isUnknown: event.resultTag == null,
+        isUnknown: !hasKnownTag,
         sameDayIndex,
         sameDayCount: sameDayEvents.length,
       }
@@ -560,7 +612,7 @@ export default function PlayerTimeline({ linkedPlayerId = null }) {
               )
             }
 
-            const chartColor = comparisonColors[slot.player.id] || COMPARISON_COLOR_PALETTE[0]
+            const chartColor = comparisonColors[slot.player.id] || DISC_COLOR_VALUES['disc-white']
             const isFocused = focusedPlayerId === slot.player.id
             const discClass = getPlayerDiscColorClass({ id: slot.player.id, name: slot.player.label })
 
@@ -627,15 +679,39 @@ export default function PlayerTimeline({ linkedPlayerId = null }) {
                     ))}
 
                     {chartSeries.map((series) => {
-                      const seriesColor = comparisonColors[series.id] || COMPARISON_COLOR_PALETTE[0]
+                      const seriesColor = comparisonColors[series.id] || DISC_COLOR_VALUES['disc-white']
                       const isFocused = focusedPlayerId === series.id
                       const isFaded = focusedPlayerId != null && !isFocused
-                      const pathData = series.points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+                      const orthogonal = buildOrthogonalTimelineSegments(series.points)
+                      const visualSpec = getOrthogonalTimelineVisualSpec()
 
                       return (
                         <g key={`series-${series.id}`} opacity={isFaded ? 0.25 : 1}>
-                          <path d={pathData} fill="none" stroke={seriesColor} strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" />
-                          {series.points.map((point) => {
+                          {orthogonal.horizontalSegments.map((segment, index) => (
+                            <line
+                              key={`${series.id}-h-${index}`}
+                              x1={segment.x1}
+                              y1={segment.y1}
+                              x2={segment.x2}
+                              y2={segment.y2}
+                              stroke={seriesColor}
+                              strokeWidth={visualSpec.horizontalStrokeWidth}
+                            />
+                          ))}
+
+                          {orthogonal.verticalSegments.map((segment, index) => (
+                            <line
+                              key={`${series.id}-v-${index}`}
+                              x1={segment.x1}
+                              y1={segment.y1}
+                              x2={segment.x2}
+                              y2={segment.y2}
+                              stroke={seriesColor}
+                              strokeWidth={visualSpec.verticalStrokeWidth}
+                            />
+                          ))}
+
+                          {orthogonal.points.map((point) => {
                             const isActive = activeEvent && point.matchKey === activeEvent.matchKey && point.playerId === activeEvent.playerId
                             const labelText = isActive ? getPointTagLabel(point, chartLayout) : null
                             const labelX = Math.min(Math.max(point.x, chartLayout.left + 10), chartLayout.width - chartLayout.right - 10)
@@ -658,10 +734,10 @@ export default function PlayerTimeline({ linkedPlayerId = null }) {
                                 <circle
                                   cx={point.x}
                                   cy={point.y}
-                                  r={isActive ? 7 : 5}
+                                  r={visualSpec.pointRadius}
                                   fill={seriesColor}
                                   stroke={isActive ? 'rgba(8,26,19,0.92)' : 'rgba(8,26,19,0.72)'}
-                                  strokeWidth={isActive ? 3 : 2}
+                                  strokeWidth={isActive ? 2.5 : 1.5}
                                 />
                                 {labelText && (
                                   <text x={labelX} y={labelY} textAnchor="middle" fill="var(--text-primary)" fontSize="11" fontWeight="700" paintOrder="stroke" stroke="rgba(8,26,19,0.88)" strokeWidth="2">
